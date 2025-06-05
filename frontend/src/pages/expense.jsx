@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   FaPlus,
@@ -16,6 +16,9 @@ import {
   FaHome,
   FaCog,
 } from "react-icons/fa";
+
+// Define your API Base URL here
+const API_BASE_URL = "http://localhost:5000/api"; // **IMPORTANT: Replace with your actual backend API URL**
 
 // Updated styles to match dashboard navbar pattern
 const styles = {
@@ -451,15 +454,7 @@ const Expense = () => {
   const [notes, setNotes] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [showError, setShowError] = useState(false);
-  const [expenses, setExpenses] = useState([
-    {
-      id: 1,
-      type: "Groceries",
-      amount: 50.0,
-      date: "25 Feb, 2025",
-      status: "Normal",
-    },
-  ]);
+  const [expenses, setExpenses] = useState([]); // Initialize with empty array
 
   const expenseTypes = [
     "Rent",
@@ -479,7 +474,7 @@ const Expense = () => {
   }
 
   const handleLogout = () => {
-    localStorage.removeItem("accessToken");
+    localStorage.removeItem("accessToken"); // Remove token on logout
     navigate("/getStarted");
   };
 
@@ -487,6 +482,7 @@ const Expense = () => {
     setShowAddExpense(!showAddExpense);
     setShowDropdown(false);
     if (!showAddExpense) {
+      // Reset form fields when opening the form
       setExpenseType("");
       setAmount("");
       setDate(getCurrentDate());
@@ -530,7 +526,37 @@ const Expense = () => {
     return `${day} ${month}, ${year}`;
   };
 
-  const addExpense = () => {
+  const fetchExpenses = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/expenses`, {
+        headers: {
+          // Add authorization header if your API requires it
+          // 'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to fetch expenses");
+      }
+
+      const data = await response.json();
+      // Assuming your backend sends dates in a format that needs formatting for display
+      const formattedExpenses = data.map((exp) => ({
+        ...exp,
+        date: formatDate(exp.date), // Format date for display
+        status: exp.status || "Normal", // Assign a default status if not provided by backend
+      }));
+      setExpenses(formattedExpenses);
+    } catch (error) {
+      console.error("Error fetching expenses:", error);
+      setErrorMessage(error.message || "Failed to load expenses.");
+      setShowError(true);
+      setTimeout(() => setShowError(false), 3000);
+    }
+  };
+
+  const addExpense = async () => {
     if (!expenseType || !amount || !date) {
       setErrorMessage("Please fill all required fields!");
       setShowError(true);
@@ -540,26 +566,159 @@ const Expense = () => {
       return;
     }
 
-    // Show simple failure message
-    setErrorMessage("Failed to add expense");
-    setShowError(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/expenses`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          // Add authorization header if your API requires it
+          // 'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+        },
+        body: JSON.stringify({
+          type: expenseType,
+          amount: parseFloat(amount), // Ensure amount is sent as a number
+          date: date,
+          notes: notes,
+        }),
+      });
 
-    setTimeout(() => {
-      setShowError(false);
-    }, 3000);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to add expense");
+      }
 
-    // Reset form
-    setExpenseType("");
-    setAmount("");
-    setDate(getCurrentDate());
-    setNotes("");
-    setShowAddExpense(false);
+      const newExpense = await response.json();
+      // Add the new expense to the state, formatting the date
+      setExpenses([
+        ...expenses,
+        {
+          ...newExpense,
+          date: formatDate(newExpense.date),
+          status: newExpense.status || "Normal",
+        },
+      ]);
+      setErrorMessage("Expense added successfully!"); // Success message
+      setShowError(true);
+      setTimeout(() => setShowError(false), 3000);
+
+      // Reset form after successful addition
+      setExpenseType("");
+      setAmount("");
+      setDate(getCurrentDate());
+      setNotes("");
+      setShowAddExpense(false);
+    } catch (error) {
+      console.error("Error adding expense:", error);
+      setErrorMessage(error.message || "Failed to add expense.");
+      setShowError(true);
+      setTimeout(() => {
+        setShowError(false);
+      }, 3000);
+    }
   };
 
-  const deleteExpense = (id) => {
+  const deleteExpense = async (id) => {
     if (window.confirm("Are you sure you want to delete this expense?")) {
-      setExpenses(expenses.filter((expense) => expense.id !== id));
+      try {
+        const response = await fetch(`${API_BASE_URL}/expenses/${id}`, {
+          method: "DELETE",
+          headers: {
+            // Add authorization header if your API requires it
+            // 'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+          },
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || "Failed to delete expense");
+        }
+
+        setExpenses(expenses.filter((expense) => expense.id !== id));
+        setErrorMessage("Expense deleted successfully!"); // Success message
+        setShowError(true);
+        setTimeout(() => setShowError(false), 3000);
+      } catch (error) {
+        console.error("Error deleting expense:", error);
+        setErrorMessage(error.message || "Failed to delete expense.");
+        setShowError(true);
+        setTimeout(() => {
+          setShowError(false);
+        }, 3000);
+      }
     }
+  };
+
+  const handleUploadReceipt = async () => {
+    setErrorMessage("Functionality to upload receipts is not yet implemented.");
+    setShowError(true);
+    setTimeout(() => setShowError(false), 3000);
+
+    // **Placeholder for actual file upload logic:**
+    // You would typically use FormData to send files to the backend.
+    // Example:
+    /*
+    const formData = new FormData();
+    formData.append('receipt', yourFileInput.files[0]); // assuming you have an input type="file"
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/upload-receipt`, {
+        method: "POST",
+        body: formData,
+        headers: {
+          // 'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+          // 'Content-Type': 'multipart/form-data' is usually set automatically by fetch/axios with FormData
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Receipt upload failed");
+      }
+
+      setErrorMessage("Receipt uploaded successfully!");
+      // You might want to refresh expenses or add the parsed expense
+      // fetchExpenses();
+    } catch (error) {
+      console.error("Upload error:", error);
+      setErrorMessage(error.message || "Failed to upload receipt.");
+    } finally {
+      setTimeout(() => setShowError(false), 3000);
+    }
+    */
+  };
+
+  const handleViewCharts = async () => {
+    setErrorMessage("Expense visualization feature is not yet implemented.");
+    setShowError(true);
+    setTimeout(() => setShowError(false), 3000);
+
+    // **Placeholder for fetching data for visualizations:**
+    /*
+    try {
+      const response = await fetch(`${API_BASE_URL}/expense-summary`, { // Example endpoint for chart data
+        method: "GET",
+        headers: {
+          // 'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to fetch chart data");
+      }
+
+      const chartData = await response.json();
+      console.log("Chart data received:", chartData);
+      // You would then use this 'chartData' to render your charts
+      // (e.g., using a charting library like Chart.js, Recharts, Nivo, etc.)
+      setErrorMessage("Charts generated successfully!");
+    } catch (error) {
+      console.error("Chart data fetch error:", error);
+      setErrorMessage(error.message || "Failed to generate charts.");
+    } finally {
+      setTimeout(() => setShowError(false), 3000);
+    }
+    */
   };
 
   // Add keyframes to document
@@ -571,9 +730,11 @@ const Expense = () => {
     }
   };
 
-  useState(() => {
+  // Run on component mount
+  useEffect(() => {
     addKeyframesToDocument();
-  }, []);
+    fetchExpenses(); // Fetch expenses when the component mounts
+  }, []); // Empty dependency array ensures this runs only once
 
   return (
     <div style={styles.expensePage}>
@@ -708,56 +869,82 @@ const Expense = () => {
                 </tr>
               </thead>
               <tbody>
-                {expenses.map((expense) => (
-                  <tr key={expense.id}>
-                    <td style={styles.tableCell}>{expense.type}</td>
-                    <td style={styles.tableCell}>Rs. {expense.amount}</td>
-                    <td style={styles.tableCell}>{expense.date}</td>
-                    <td style={styles.tableCell}>
-                      <span
-                        style={{
-                          ...styles.badge,
-                          ...(expense.status === "Normal"
-                            ? styles.badgeNormal
-                            : styles.badgeAnomaly),
-                        }}
-                      >
-                        {expense.status}
-                      </span>
-                    </td>
-                    <td style={styles.tableCell}>
-                      <div style={styles.actionButtons}>
-                        <button
-                          style={styles.iconButton}
-                          onMouseOver={(e) =>
-                            (e.currentTarget.style.backgroundColor =
-                              styles.iconButtonHover.backgroundColor)
-                          }
-                          onMouseOut={(e) =>
-                            (e.currentTarget.style.backgroundColor =
-                              styles.iconButton.backgroundColor)
-                          }
-                        >
-                          <FaEdit style={styles.iconSmall} />
-                        </button>
-                        <button
-                          style={{ ...styles.iconButton, ...styles.btnDelete }}
-                          onMouseOver={(e) =>
-                            (e.currentTarget.style.color =
-                              styles.btnDeleteHover.color)
-                          }
-                          onMouseOut={(e) =>
-                            (e.currentTarget.style.color =
-                              styles.btnDelete.color)
-                          }
-                          onClick={() => deleteExpense(expense.id)}
-                        >
-                          <FaTrashAlt style={styles.iconSmall} />
-                        </button>
-                      </div>
+                {expenses.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan="5"
+                      style={{
+                        ...styles.tableCell,
+                        textAlign: "center",
+                        color: "#a0a0a0",
+                      }}
+                    >
+                      No expenses recorded yet.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  expenses.map((expense) => (
+                    <tr key={expense.id}>
+                      <td style={styles.tableCell}>{expense.type}</td>
+                      <td style={styles.tableCell}>Rs. {expense.amount}</td>
+                      <td style={styles.tableCell}>{expense.date}</td>
+                      <td style={styles.tableCell}>
+                        <span
+                          style={{
+                            ...styles.badge,
+                            ...(expense.status === "Normal"
+                              ? styles.badgeNormal
+                              : styles.badgeAnomaly),
+                          }}
+                        >
+                          {expense.status}
+                        </span>
+                      </td>
+                      <td style={styles.tableCell}>
+                        <div style={styles.actionButtons}>
+                          <button
+                            style={styles.iconButton}
+                            onMouseOver={(e) =>
+                              (e.currentTarget.style.backgroundColor =
+                                styles.iconButtonHover.backgroundColor)
+                            }
+                            onMouseOut={(e) =>
+                              (e.currentTarget.style.backgroundColor =
+                                styles.iconButton.backgroundColor)
+                            }
+                            // Add onClick for edit functionality (placeholder)
+                            onClick={() => {
+                              setErrorMessage(
+                                "Edit functionality not implemented yet."
+                              );
+                              setShowError(true);
+                              setTimeout(() => setShowError(false), 3000);
+                            }}
+                          >
+                            <FaEdit style={styles.iconSmall} />
+                          </button>
+                          <button
+                            style={{
+                              ...styles.iconButton,
+                              ...styles.btnDelete,
+                            }}
+                            onMouseOver={(e) =>
+                              (e.currentTarget.style.color =
+                                styles.btnDeleteHover.color)
+                            }
+                            onMouseOut={(e) =>
+                              (e.currentTarget.style.color =
+                                styles.btnDelete.color)
+                            }
+                            onClick={() => deleteExpense(expense.id)}
+                          >
+                            <FaTrashAlt style={styles.iconSmall} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -976,11 +1163,7 @@ const Expense = () => {
                         (e.currentTarget.style.backgroundColor =
                           styles.btnPrimary.backgroundColor)
                       }
-                      onClick={() => {
-                        setErrorMessage("Upload failed");
-                        setShowError(true);
-                        setTimeout(() => setShowError(false), 3000);
-                      }}
+                      onClick={handleUploadReceipt} // Call the new handler
                     >
                       Start Now
                     </button>
@@ -1013,11 +1196,7 @@ const Expense = () => {
                 (e.currentTarget.style.backgroundColor =
                   styles.btnPrimary.backgroundColor)
               }
-              onClick={() => {
-                setErrorMessage("Visualization failed");
-                setShowError(true);
-                setTimeout(() => setShowError(false), 3000);
-              }}
+              onClick={handleViewCharts} // Call the new handler
             >
               <FaChartLine style={styles.btnIcon} /> View Charts
             </button>
