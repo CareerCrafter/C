@@ -188,7 +188,7 @@ const Login = () => {
               sx={{ textAlign: "center", width: "100%", position: "relative" }}
             >
               <Link
-                to="/forgot-password"
+                to="/Verifymail"
                 style={{
                   position: "absolute",
                   right: 0,

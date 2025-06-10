@@ -20,16 +20,13 @@ const VerifyEmail = () => {
   // Replace this with your actual API call
   const sendResetEmail = async (email) => {
     // Example with fetch, adjust URL and method as needed
-    const response = await fetch(
-      "https://your-backend.com/api/send-reset-email",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email }),
-      }
-    );
+    const response = await fetch(`http://localhost:5050/api/reset-password`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email }),
+    });
 
     if (!response.ok) {
       const errorData = await response.json();

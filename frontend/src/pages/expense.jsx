@@ -1,7 +1,9 @@
-"use client";
+"use client"; // This directive is typically used for Next.js App Router components
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import axios from "axios"; // Import axios
+import toast from "react-hot-toast"; // Import toast for messages
 import {
   FaPlus,
   FaTimes,
@@ -18,9 +20,12 @@ import {
 } from "react-icons/fa";
 
 // Define your API Base URL here
-const API_BASE_URL = "http://localhost:5000/api"; // **IMPORTANT: Replace with your actual backend API URL**
+const API_BASE_URL = "http://localhost:5050"; // IMPORTANT: Replace with your actual backend API URL
 
-// Updated styles to match dashboard navbar pattern
+// Helper function to get authorization header from localStorage
+// This assumes your backend uses Bearer tokens for authentication
+
+// Updated styles (kept as is from your provided code)
 const styles = {
   expensePage: {
     minHeight: "100vh",
@@ -461,20 +466,54 @@ const Expense = () => {
     "Groceries",
     "Entertainment",
     "Utilities",
-    "Transport",
+    "Transportation",
     "Miscellaneous",
   ];
 
   function getCurrentDate() {
     const today = new Date();
-    const yyyy = today.getFullYear();
-    const mm = String(today.getMonth() + 1).padStart(2, "0");
-    const dd = String(today.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, "0");
+    const day = String(today.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
   }
 
+  // Helper function to get authorization header from localStorage (moved here)
+  const getAuthHeaders = () => {
+    const accessToken = localStorage.getItem("accessToken");
+    return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+  };
+
+  // API Call: Fetch Expenses
+  const fetchExpenses = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/expense/list`, {
+        headers: getAuthHeaders(),
+      });
+      // Assuming backend sends an array of expenses, and each expense has `_id` or `id`
+      const formattedExpenses = response.data.map((exp) => ({
+        ...exp,
+        id: exp._id || exp.id, // Ensure `id` is properly extracted
+        date: formatDate(exp.date), // Format date for display
+        status: exp.status || "Normal", // Assign a default status if not provided
+      }));
+      setExpenses(formattedExpenses);
+    } catch (error) {
+      console.error("Error fetching expenses:", error);
+      toast.error(error.response?.data?.message || "Failed to load expenses.");
+    }
+  };
+
+  // Run on component mount
+  useEffect(() => {
+    fetchExpenses(); // Fetch expenses when the component mounts
+    addKeyframesToDocument(); // Add keyframes when component mounts
+  }, []); // Empty dependency array ensures this runs only once
+
+  // Function to handle logout
   const handleLogout = () => {
     localStorage.removeItem("accessToken"); // Remove token on logout
+    toast.success("Logged out successfully.");
     navigate("/getStarted");
   };
 
@@ -505,6 +544,11 @@ const Expense = () => {
   };
 
   const formatDate = (dateString) => {
+    // Check if dateString is valid to prevent errors from invalid dates
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    if (isNaN(date)) return dateString; // Return original if invalid date
+
     const months = [
       "Jan",
       "Feb",
@@ -519,44 +563,14 @@ const Expense = () => {
       "Nov",
       "Dec",
     ];
-    const date = new Date(dateString);
     const day = date.getDate();
     const month = months[date.getMonth()];
     const year = date.getFullYear();
     return `${day} ${month}, ${year}`;
   };
 
-  const fetchExpenses = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/expenses`, {
-        headers: {
-          // Add authorization header if your API requires it
-          // 'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-        },
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to fetch expenses");
-      }
-
-      const data = await response.json();
-      // Assuming your backend sends dates in a format that needs formatting for display
-      const formattedExpenses = data.map((exp) => ({
-        ...exp,
-        date: formatDate(exp.date), // Format date for display
-        status: exp.status || "Normal", // Assign a default status if not provided by backend
-      }));
-      setExpenses(formattedExpenses);
-    } catch (error) {
-      console.error("Error fetching expenses:", error);
-      setErrorMessage(error.message || "Failed to load expenses.");
-      setShowError(true);
-      setTimeout(() => setShowError(false), 3000);
-    }
-  };
-
-  const addExpense = async () => {
+  // API Call: Add Expense
+  const handleAddExpense = async () => {
     if (!expenseType || !amount || !date) {
       setErrorMessage("Please fill all required fields!");
       setShowError(true);
@@ -567,84 +581,71 @@ const Expense = () => {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/expenses`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          // Add authorization header if your API requires it
-          // 'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-        },
-        body: JSON.stringify({
-          type: expenseType,
-          amount: parseFloat(amount), // Ensure amount is sent as a number
-          date: date,
-          notes: notes,
-        }),
-      });
+      const newExpenseData = {
+        category: expenseType,
+        amount: parseFloat(amount), // Ensure amount is a number
+        date: date, // YYYY-MM-DD format as expected by backend
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to add expense");
-      }
-
-      const newExpense = await response.json();
-      // Add the new expense to the state, formatting the date
-      setExpenses([
-        ...expenses,
+        // Backend might determine status or add other fields like userId
+      };
+      const response = await axios.post(
+        `http://localhost:5050/expense/add`,
+        newExpenseData,
         {
-          ...newExpense,
-          date: formatDate(newExpense.date),
-          status: newExpense.status || "Normal",
+          headers: {
+            "Content-Type": "application/json",
+            ...getAuthHeaders(),
+          },
+        }
+      );
+      const addedExpense = response.data;
+
+      // Update local state with the new expense, formatting its date
+      setExpenses((prevExpenses) => [
+        ...prevExpenses,
+        {
+          ...addedExpense,
+          id: addedExpense._id || addedExpense.id, // Ensure `id` is properly extracted
+          date: formatDate(addedExpense.date), // Format date for display
+          status: addedExpense.status || "Normal", // Ensure status is present
         },
       ]);
-      setErrorMessage("Expense added successfully!"); // Success message
-      setShowError(true);
-      setTimeout(() => setShowError(false), 3000);
 
-      // Reset form after successful addition
+      toast.success("Expense added successfully!"); // Display success message
+      // Reset form fields after successful addition
       setExpenseType("");
       setAmount("");
       setDate(getCurrentDate());
       setNotes("");
-      setShowAddExpense(false);
+      // Keep form open for consecutive entries, uncomment below to close automatically
+      // setShowAddExpense(false);
+      setErrorMessage(""); // Clear any previous error messages
+      setShowError(false);
     } catch (error) {
       console.error("Error adding expense:", error);
-      setErrorMessage(error.message || "Failed to add expense.");
-      setShowError(true);
-      setTimeout(() => {
-        setShowError(false);
-      }, 3000);
+      toast.error(
+        error.response?.data?.message ||
+          error?.message ||
+          "Failed to add expense."
+      );
     }
   };
 
-  const deleteExpense = async (id) => {
-    if (window.confirm("Are you sure you want to delete this expense?")) {
-      try {
-        const response = await fetch(`${API_BASE_URL}/expenses/${id}`, {
-          method: "DELETE",
-          headers: {
-            // Add authorization header if your API requires it
-            // 'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-          },
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || "Failed to delete expense");
-        }
-
-        setExpenses(expenses.filter((expense) => expense.id !== id));
-        setErrorMessage("Expense deleted successfully!"); // Success message
-        setShowError(true);
-        setTimeout(() => setShowError(false), 3000);
-      } catch (error) {
-        console.error("Error deleting expense:", error);
-        setErrorMessage(error.message || "Failed to delete expense.");
-        setShowError(true);
-        setTimeout(() => {
-          setShowError(false);
-        }, 3000);
-      }
+  // API Call: Delete Expense
+  const handleDeleteExpense = async (id) => {
+    // IMPORTANT: window.confirm is replaced. In a real app, use a custom modal for confirmation.
+    console.log(
+      `Attempting to delete expense with ID: ${id}. Confirmation bypassed for Canvas environment.`
+    );
+    try {
+      await axios.delete(`${API_BASE_URL}/expense/delete/${id}`, {
+        headers: getAuthHeaders(),
+      });
+      setExpenses(expenses.filter((expense) => expense.id !== id)); // Update local state
+      toast.success("Expense deleted successfully!"); // Display success message
+    } catch (error) {
+      console.error("Error deleting expense:", error);
+      toast.error(error.response?.data?.message || "Failed to delete expense.");
     }
   };
 
@@ -652,76 +653,17 @@ const Expense = () => {
     setErrorMessage("Functionality to upload receipts is not yet implemented.");
     setShowError(true);
     setTimeout(() => setShowError(false), 3000);
-
-    // **Placeholder for actual file upload logic:**
-    // You would typically use FormData to send files to the backend.
-    // Example:
-    /*
-    const formData = new FormData();
-    formData.append('receipt', yourFileInput.files[0]); // assuming you have an input type="file"
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/upload-receipt`, {
-        method: "POST",
-        body: formData,
-        headers: {
-          // 'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-          // 'Content-Type': 'multipart/form-data' is usually set automatically by fetch/axios with FormData
-        },
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Receipt upload failed");
-      }
-
-      setErrorMessage("Receipt uploaded successfully!");
-      // You might want to refresh expenses or add the parsed expense
-      // fetchExpenses();
-    } catch (error) {
-      console.error("Upload error:", error);
-      setErrorMessage(error.message || "Failed to upload receipt.");
-    } finally {
-      setTimeout(() => setShowError(false), 3000);
-    }
-    */
+    // Placeholder for actual file upload logic
   };
 
   const handleViewCharts = async () => {
     setErrorMessage("Expense visualization feature is not yet implemented.");
     setShowError(true);
     setTimeout(() => setShowError(false), 3000);
-
-    // **Placeholder for fetching data for visualizations:**
-    /*
-    try {
-      const response = await fetch(`${API_BASE_URL}/expense-summary`, { // Example endpoint for chart data
-        method: "GET",
-        headers: {
-          // 'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-        },
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to fetch chart data");
-      }
-
-      const chartData = await response.json();
-      console.log("Chart data received:", chartData);
-      // You would then use this 'chartData' to render your charts
-      // (e.g., using a charting library like Chart.js, Recharts, Nivo, etc.)
-      setErrorMessage("Charts generated successfully!");
-    } catch (error) {
-      console.error("Chart data fetch error:", error);
-      setErrorMessage(error.message || "Failed to generate charts.");
-    } finally {
-      setTimeout(() => setShowError(false), 3000);
-    }
-    */
+    // Placeholder for fetching data for visualizations
   };
 
-  // Add keyframes to document
+  // Add keyframes to document (remains as is)
   const addKeyframesToDocument = () => {
     if (typeof document !== "undefined") {
       const styleElement = document.createElement("style");
@@ -729,12 +671,6 @@ const Expense = () => {
       document.head.appendChild(styleElement);
     }
   };
-
-  // Run on component mount
-  useEffect(() => {
-    addKeyframesToDocument();
-    fetchExpenses(); // Fetch expenses when the component mounts
-  }, []); // Empty dependency array ensures this runs only once
 
   return (
     <div style={styles.expensePage}>
@@ -815,7 +751,7 @@ const Expense = () => {
         </div>
       </nav>
 
-      {/* Error Message */}
+      {/* Local Error Message (for form validation or feature not implemented) */}
       {showError && (
         <div style={styles.errorMessage}>
           <div style={styles.errorIcon}>✕</div>
@@ -885,9 +821,11 @@ const Expense = () => {
                 ) : (
                   expenses.map((expense) => (
                     <tr key={expense.id}>
+                      <td>{expense.category}</td>
                       <td style={styles.tableCell}>{expense.type}</td>
                       <td style={styles.tableCell}>Rs. {expense.amount}</td>
-                      <td style={styles.tableCell}>{expense.date}</td>
+                      <td style={styles.tableCell}>{expense.date}</td>{" "}
+                      {/* Already formatted by fetchExpenses */}
                       <td style={styles.tableCell}>
                         <span
                           style={{
@@ -936,7 +874,7 @@ const Expense = () => {
                               (e.currentTarget.style.color =
                                 styles.btnDelete.color)
                             }
-                            onClick={() => deleteExpense(expense.id)}
+                            onClick={() => handleDeleteExpense(expense.id)}
                           >
                             <FaTrashAlt style={styles.iconSmall} />
                           </button>
@@ -1019,13 +957,37 @@ const Expense = () => {
                           >
                             <FaTag style={styles.inputIcon} />
                             <span style={styles.dropdownPlaceholder}>
-                              {expenseType || "Select or type expense type"}
+                              {expenseType || "Select  expense type"}
                             </span>
                             <span style={styles.dropdownArrow}>▼</span>
                           </div>
 
                           {showDropdown && (
-                            <div style={styles.dropdownMenu}>
+                            <div
+                              style={{
+                                ...styles.dropdownMenu,
+                                maxHeight: "200px",
+                                overflowY: "auto",
+                              }}
+                            >
+                              {expenseTypes.map((type) => (
+                                <div
+                                  key={type}
+                                  style={styles.dropdownItem}
+                                  onMouseOver={(e) =>
+                                    (e.currentTarget.style.backgroundColor =
+                                      styles.dropdownItemHover.backgroundColor)
+                                  }
+                                  onMouseOut={(e) =>
+                                    (e.currentTarget.style.backgroundColor =
+                                      "transparent")
+                                  }
+                                  onClick={() => selectExpenseType(type)}
+                                >
+                                  {type}
+                                </div>
+                              ))}
+
                               {expenseTypes.map((type) => (
                                 <div
                                   key={type}
@@ -1138,7 +1100,7 @@ const Expense = () => {
                           (e.currentTarget.style.backgroundColor =
                             styles.btnPrimary.backgroundColor)
                         }
-                        onClick={addExpense}
+                        onClick={handleAddExpense} // Use the new handleAddExpense
                       >
                         Add Expense
                       </button>
@@ -1163,7 +1125,7 @@ const Expense = () => {
                         (e.currentTarget.style.backgroundColor =
                           styles.btnPrimary.backgroundColor)
                       }
-                      onClick={handleUploadReceipt} // Call the new handler
+                      onClick={handleUploadReceipt} // Use the new handler
                     >
                       Start Now
                     </button>
@@ -1196,7 +1158,7 @@ const Expense = () => {
                 (e.currentTarget.style.backgroundColor =
                   styles.btnPrimary.backgroundColor)
               }
-              onClick={handleViewCharts} // Call the new handler
+              onClick={handleViewCharts} // Use the new handler
             >
               <FaChartLine style={styles.btnIcon} /> View Charts
             </button>
