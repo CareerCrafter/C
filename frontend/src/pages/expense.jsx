@@ -1,6 +1,6 @@
 "use client"; // This directive is typically used for Next.js App Router components
 
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios"; // Import axios
 import toast from "react-hot-toast"; // Import toast for messages
@@ -490,10 +490,10 @@ const Expense = () => {
       const response = await axios.get(`${API_BASE_URL}/expense/list`, {
         headers: getAuthHeaders(),
       });
-      // Assuming backend sends an array of expenses, and each expense has `_id` or `id`
+      // Assuming backend sends an array of expenses, and each expense has _id or id
       const formattedExpenses = response.data.map((exp) => ({
         ...exp,
-        id: exp._id || exp.id, // Ensure `id` is properly extracted
+        id: exp._id || exp.id, // Ensure id is properly extracted
         date: formatDate(exp.date), // Format date for display
         status: exp.status || "Normal", // Assign a default status if not provided
       }));
@@ -566,7 +566,7 @@ const Expense = () => {
     const day = date.getDate();
     const month = months[date.getMonth()];
     const year = date.getFullYear();
-    return `${day} ${month}, ${year}`;
+    return ` ${day}-${month}- ${year}`;
   };
 
   // API Call: Add Expense
@@ -583,13 +583,13 @@ const Expense = () => {
     try {
       const newExpenseData = {
         category: expenseType,
-        amount: parseFloat(amount), // Ensure amount is a number
-        date: date, // YYYY-MM-DD format as expected by backend
-
-        // Backend might determine status or add other fields like userId
+        amount: Number.parseFloat(amount),
+        date: date,
+        notes: notes || "",
       };
+
       const response = await axios.post(
-        `http://localhost:5050/expense/add`,
+        `${API_BASE_URL}/expense/add`,
         newExpenseData,
         {
           headers: {
@@ -598,28 +598,29 @@ const Expense = () => {
           },
         }
       );
-      const addedExpense = response.data;
 
-      // Update local state with the new expense, formatting its date
-      setExpenses((prevExpenses) => [
-        ...prevExpenses,
-        {
-          ...addedExpense,
-          id: addedExpense._id || addedExpense.id, // Ensure `id` is properly extracted
-          date: formatDate(addedExpense.date), // Format date for display
-          status: addedExpense.status || "Normal", // Ensure status is present
-        },
-      ]);
+      // Create a properly formatted expense object regardless of API response format
+      const newExpense = {
+        id: response.data._id || response.data.id || Date.now().toString(), // Fallback ID if API doesn't return one
+        category: expenseType,
+        amount: Number.parseFloat(amount),
+        date: formatDate(date),
+        status: "Normal",
+        notes: notes || "",
+      };
 
-      toast.success("Expense added successfully!"); // Display success message
-      // Reset form fields after successful addition
+      // Update local state with the new expense
+      setExpenses((prevExpenses) => [newExpense, ...prevExpenses]);
+
+      toast.success("Expense added successfully!");
+
+      // Reset form fields
       setExpenseType("");
       setAmount("");
       setDate(getCurrentDate());
       setNotes("");
-      // Keep form open for consecutive entries, uncomment below to close automatically
-      // setShowAddExpense(false);
-      setErrorMessage(""); // Clear any previous error messages
+      setShowAddExpense(false); // Close the form after adding
+      setErrorMessage("");
       setShowError(false);
     } catch (error) {
       console.error("Error adding expense:", error);
@@ -656,11 +657,8 @@ const Expense = () => {
     // Placeholder for actual file upload logic
   };
 
-  const handleViewCharts = async () => {
-    setErrorMessage("Expense visualization feature is not yet implemented.");
-    setShowError(true);
-    setTimeout(() => setShowError(false), 3000);
-    // Placeholder for fetching data for visualizations
+  const handleViewCharts = () => {
+    navigate("/visualize"); // Navigate to your existing visualization component
   };
 
   // Add keyframes to document (remains as is)
@@ -821,11 +819,9 @@ const Expense = () => {
                 ) : (
                   expenses.map((expense) => (
                     <tr key={expense.id}>
-                      <td>{expense.category}</td>
-                      <td style={styles.tableCell}>{expense.type}</td>
+                      <td style={styles.tableCell}>{expense.category}</td>
                       <td style={styles.tableCell}>Rs. {expense.amount}</td>
-                      <td style={styles.tableCell}>{expense.date}</td>{" "}
-                      {/* Already formatted by fetchExpenses */}
+                      <td style={styles.tableCell}>{expense.date}</td>
                       <td style={styles.tableCell}>
                         <span
                           style={{
@@ -970,24 +966,6 @@ const Expense = () => {
                                 overflowY: "auto",
                               }}
                             >
-                              {expenseTypes.map((type) => (
-                                <div
-                                  key={type}
-                                  style={styles.dropdownItem}
-                                  onMouseOver={(e) =>
-                                    (e.currentTarget.style.backgroundColor =
-                                      styles.dropdownItemHover.backgroundColor)
-                                  }
-                                  onMouseOut={(e) =>
-                                    (e.currentTarget.style.backgroundColor =
-                                      "transparent")
-                                  }
-                                  onClick={() => selectExpenseType(type)}
-                                >
-                                  {type}
-                                </div>
-                              ))}
-
                               {expenseTypes.map((type) => (
                                 <div
                                   key={type}

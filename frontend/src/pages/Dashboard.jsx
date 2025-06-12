@@ -1,5 +1,5 @@
 "use client";
-
+import { jwtDecode } from "jwt-decode";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -27,9 +27,8 @@ import {
   Settings,
   Wand,
 } from "lucide-react";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 
-// Create dark theme
 const darkTheme = createTheme({
   palette: {
     mode: "dark",
@@ -71,7 +70,6 @@ const darkTheme = createTheme({
   },
 });
 
-// Feature card data
 const featureCards = [
   {
     title: "Upload Bills and Manage Expenses",
@@ -106,6 +104,7 @@ const Dashboard = () => {
 
   useEffect(() => {
     const checkAuth = async () => {
+      toast.dismiss();
       const token = localStorage.getItem("accessToken");
 
       if (!token) {
@@ -115,12 +114,15 @@ const Dashboard = () => {
       }
 
       try {
-        setUser({ email: "user@example.com" });
+        const decoded = jwtDecode(token);
+        const name = decoded.fullName || decoded.name || decoded.email;
+        setUser({ email: decoded.email, name: decoded.fullName });
       } catch (error) {
         console.error("Authentication error:", error);
         toast.error("Session expired. Please login again.");
         localStorage.removeItem("accessToken");
         navigate("/");
+        return;
       } finally {
         setLoading(false);
       }
@@ -154,10 +156,7 @@ const Dashboard = () => {
 
     setTimeout(handleScroll, 100);
     window.addEventListener("scroll", handleScroll);
-
-    return () => {
-      window.removeEventListener("scroll", handleScroll);
-    };
+    return () => window.removeEventListener("scroll", handleScroll);
   }, [navigate]);
 
   const handleLogout = () => {
@@ -189,18 +188,7 @@ const Dashboard = () => {
   return (
     <ThemeProvider theme={darkTheme}>
       <CssBaseline />
-      <Toaster
-        position="top-right"
-        toastOptions={{
-          style: {
-            background: "#333",
-            color: "#fff",
-          },
-        }}
-      />
-
       <Box sx={{ flexGrow: 1, position: "relative", minHeight: "100vh" }}>
-        {/* Dashboard Navbar - Only Home, Services, Dashboard, Logout */}
         <AppBar
           position="static"
           color="transparent"
@@ -258,7 +246,6 @@ const Dashboard = () => {
           </Toolbar>
         </AppBar>
 
-        {/* Main Content */}
         <Container maxWidth="lg" sx={{ mt: 8, mb: 8 }}>
           <Typography variant="h3" component="h1" align="center" gutterBottom>
             Dashboard
@@ -275,12 +262,11 @@ const Dashboard = () => {
                 component="span"
                 sx={{ color: "#14b8a6", fontWeight: "bold" }}
               >
-                {user.email}
+                {user.name || user.email}
               </Box>
             </Typography>
           )}
 
-          {/* Feature Cards */}
           <Grid container spacing={4}>
             {featureCards.map((card, index) => (
               <Grid item xs={12} md={4} key={index}>
@@ -343,7 +329,7 @@ const Dashboard = () => {
           </Grid>
         </Container>
 
-        {/* Background Shapes */}
+        {/* Decorative Blurs */}
         <Box
           sx={{
             position: "absolute",

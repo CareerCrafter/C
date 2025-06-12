@@ -13,12 +13,17 @@ import { Visibility, VisibilityOff } from "@mui/icons-material";
 import { Formik } from "formik";
 import * as yup from "yup";
 import toast from "react-hot-toast";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 
 const ForgotPassword = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Extract token from URL
+  const searchParams = new URLSearchParams(location.search);
+  const token = searchParams.get("token");
 
   const validationSchema = yup.object({
     newPassword: yup
@@ -33,11 +38,32 @@ const ForgotPassword = () => {
 
   const handleReset = async (values) => {
     try {
-      // Here you should send the new password to your backend
-      toast.success("Password reset successfully!");
-      navigate("/"); // Redirect to login
+      const response = await fetch(
+        "http://localhost:5050/api/reset-password/confirm",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            token,
+            newPassword: values.newPassword,
+            confirmPassword: values.confirmPassword,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success(data.message || "Password reset successfully!");
+        navigate("/getStarted"); // redirect to login
+      } else {
+        toast.error(data.message || "Reset failed");
+      }
     } catch (error) {
-      toast.error("Reset failed");
+      console.error("Reset error:", error);
+      toast.error("Something went wrong. Try again.");
     }
   };
 

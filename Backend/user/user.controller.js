@@ -11,8 +11,8 @@ import PasswordResetToken from "./passwordResetToken.model.js";
 import isUser from "../middleware/authentication.middleware.js";
 
 const app = express();
-app.use(cors()); // Enable CORS
-app.use(express.json()); // Parse incoming JSON requests
+app.use(cors());
+app.use(express.json());
 const router = express.Router();
 
 export const sendResetEmail = async (req, res) => {
@@ -46,6 +46,7 @@ export const sendResetEmail = async (req, res) => {
       });
     }
 
+    // Respond success regardless to avoid email enumeration
     return res.status(200).json({
       message:
         "If an account with that email exists, a reset link has been sent.",
@@ -66,10 +67,14 @@ export const resetPassword = async (req, res) => {
   try {
     const resetRecord = await PasswordResetToken.findOne({ token });
 
-    if (!resetRecord || resetRecord.expiresAt < new Date()) {
-      return res
-        .status(400)
-        .json({ message: "Reset token is invalid or expired." });
+    if (!resetRecord) {
+      return res.status(400).json({ message: "Reset token not found." });
+    }
+
+    if (resetRecord.expiresAt < new Date()) {
+      // Token expired, delete it to keep DB clean
+      await PasswordResetToken.deleteOne({ token });
+      return res.status(400).json({ message: "Reset token has expired." });
     }
 
     const user = await UserTable.findOne({ email: resetRecord.email });
@@ -77,10 +82,12 @@ export const resetPassword = async (req, res) => {
       return res.status(404).json({ message: "User not found." });
     }
 
+    // Hash and update password
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     user.password = hashedPassword;
     await user.save();
 
+    // Remove all reset tokens for this user (including current)
     await PasswordResetToken.deleteMany({ email: resetRecord.email });
 
     return res
@@ -92,11 +99,10 @@ export const resetPassword = async (req, res) => {
   }
 };
 
-// register
+// Register route with validation and password hashing
 router.post(
   "/user/register",
   async (req, res, next) => {
-    // create schema
     const userValidationSchema = Yup.object({
       fullName: Yup.string().required().trim().max(255),
       email: Yup.string().email().required().trim().max(100).lowercase(),
@@ -106,7 +112,6 @@ router.post(
         .required()
         .trim()
         .oneOf(["male", "female", "other", "preferNotToSay"]),
-
       phoneNumber: Yup.string().required().trim().min(10).max(20),
     });
 
@@ -118,24 +123,15 @@ router.post(
     }
   },
   async (req, res) => {
-    //   extract new user from req.body
     const newUser = req.body;
 
-    // find user with provided email
     const user = await UserTable.findOne({ email: newUser.email });
 
-    // if user exists, throw error
     if (user) {
       return res.status(409).send({ message: "Email already exists." });
     }
 
-    // hash
-    // requirement => plain password, salt rounds
-    const plainPassword = newUser.password;
-    const saltRounds = 10; //randomness
-    const hashedPassword = await bcrypt.hash(plainPassword, saltRounds);
-
-    // replace plain password by hashed password
+    const hashedPassword = await bcrypt.hash(newUser.password, 10);
     newUser.password = hashedPassword;
 
     await UserTable.create(newUser);
@@ -146,53 +142,40 @@ router.post(
   }
 );
 
-// login route
+// Login route with bcrypt password compare
 router.post("/user/login", async (req, res) => {
-  const loginCredentials = req.body;
-  console.log("Login attempt with:", loginCredentials); // Log the received credentials
+  const { email, password } = req.body;
 
-  const user = await UserTable.findOne({ email: loginCredentials.email });
-  console.log("Found user:", user); // Log the user object found in the database
+  try {
+    const user = await UserTable.findOne({ email });
+    if (!user) {
+      return res.status(401).send({ message: "Invalid credentials." });
+    }
 
-  if (!user) {
-    console.log("User not found");
-    return res.status(404).send({ message: "Invalid credentials." });
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).send({ message: "Invalid credentials." });
+    }
+
+    user.password = undefined; // remove password before sending user info
+
+    const secretKey = process.env.JWT_SECRET;
+    if (!secretKey) {
+      return res
+        .status(500)
+        .send({ message: "JWT secret key not configured." });
+    }
+
+    const payload = { email: user.email, fullName: user.fullName };
+    const token = jwt.sign(payload, secretKey, { expiresIn: "7d" });
+
+    return res
+      .status(200)
+      .send({ message: "success", userDetails: user, accessToken: token });
+  } catch (error) {
+    console.error("Login error:", error);
+    return res.status(500).send({ message: "Internal server error." });
   }
-
-  const plainPassword = loginCredentials.password;
-  const hashedPassword = user.password;
-  console.log("Plain password:", plainPassword);
-  console.log("Hashed password from DB:", hashedPassword);
-
-  const isPasswordMatch = await bcrypt.compare(plainPassword, hashedPassword);
-  console.log("Password match:", isPasswordMatch);
-
-  if (!isPasswordMatch) {
-    console.log("Password mismatch");
-    return res.status(404).send({ message: "Invalid credentials." });
-  }
-
-  // remove password
-  user.password = undefined;
-
-  //  generate access token
-  // secretkey
-  const secretKey = process.env.JWT_SECRET;
-  if (!secretKey) {
-    return res.status(500).send({ message: "JWT secret key not configured." });
-  }
-
-  // payload => object inside token
-  const payload = { email: user.email };
-
-  // encrypted cipher text
-  const token = jwt.sign(payload, secretKey, {
-    expiresIn: "7d",
-  });
-
-  return res
-    .status(200)
-    .send({ message: "success", userDetails: user, accessToken: token });
 });
 
 router.post("/api/reset-password", sendResetEmail);

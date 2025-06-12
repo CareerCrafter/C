@@ -1,4 +1,3 @@
-import express from "express";
 import crypto from "crypto";
 import bcrypt from "bcrypt";
 import nodemailer from "nodemailer";
@@ -12,15 +11,19 @@ export const sendResetEmail = async (req, res) => {
     const user = await UserTable.findOne({ email });
 
     if (user) {
-      const token = crypto.randomBytes(32).toString("hex");
+      // Remove any previous tokens for this email
       await PasswordResetToken.deleteMany({ email });
-      const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
+      const token = crypto.randomBytes(32).toString("hex");
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes expiry
+
+      // Save new reset token
       await PasswordResetToken.create({ email, token, expiresAt });
 
       const resetLink = `http://localhost:5173/reset-password?token=${token}`;
       console.log("Reset link to send in email:", resetLink);
 
+      // Setup email transporter
       const transporter = nodemailer.createTransport({
         service: "gmail",
         auth: {
@@ -29,6 +32,7 @@ export const sendResetEmail = async (req, res) => {
         },
       });
 
+      // Send reset password email
       await transporter.sendMail({
         from: process.env.EMAIL_USER,
         to: email,
@@ -37,6 +41,7 @@ export const sendResetEmail = async (req, res) => {
       });
     }
 
+    // Always respond with success message for security (do not reveal email existence)
     return res.status(200).json({
       message:
         "If an account with that email exists, a reset link has been sent.",
@@ -68,10 +73,12 @@ export const resetPassword = async (req, res) => {
       return res.status(404).json({ message: "User not found." });
     }
 
+    // Hash new password and update
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     user.password = hashedPassword;
     await user.save();
 
+    // Remove the used reset token so it cannot be reused
     await PasswordResetToken.deleteMany({ email: resetRecord.email });
 
     return res

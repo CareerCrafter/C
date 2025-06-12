@@ -6,12 +6,23 @@ import dbConnect from "./db.connection.js";
 import { userController } from "./user/user.controller.js";
 import cors from "cors";
 import { expenseController } from "./expense/expense.controller.js";
+import {
+  sendResetEmail,
+  resetPassword,
+} from "./user/passwordResetToken.controller.js";
+
 // backend app
 const app = express();
 
 // to make app understand json
 app.use(express.json());
-app.use(cors());
+app.use(
+  cors({
+    origin: "http://localhost:5173",
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true,
+  })
+);
 // database connection
 dbConnect();
 
@@ -23,15 +34,12 @@ app.use(expenseController);
 app.get("/", (req, res) => {
   res.send("API is running");
 });
+
+app.post("/api/send-reset-email", sendResetEmail);
+app.post("/api/reset-password", resetPassword);
 // network port
 const PORT = process.env.PORT || 5050;
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
-
-console.log("JWT_SECRET:", process.env.JWT_SECRET);
-console.log("MONGODB_URI:", process.env.MONGODB_URI);
-
-console.log("EMAIL_USER:", process.env.EMAIL_USER);
-console.log("EMAIL_PASS:", process.env.EMAIL_PASS);
