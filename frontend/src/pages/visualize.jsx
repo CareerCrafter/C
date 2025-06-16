@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   FaChartLine,
@@ -32,38 +32,11 @@ const COLORS = {
   Groceries: "#f59e0b",
   Entertainment: "#ef4444",
   Utilities: "#8b5cf6",
+  Transportation: "#06b6d4",
   Transport: "#06b6d4",
   Miscellaneous: "#84cc16",
 };
 
-// Manual/Hardcoded data for charts
-const categoryData = [
-  { name: "Rent", value: 15000, color: "#14b8a6" },
-  { name: "Groceries", value: 6700, color: "#f59e0b" },
-  { name: "Utilities", value: 2000, color: "#8b5cf6" },
-  { name: "Transport", value: 1800, color: "#06b6d4" },
-  { name: "Entertainment", value: 1200, color: "#ef4444" },
-  { name: "Miscellaneous", value: 1500, color: "#84cc16" },
-];
-
-const monthlyData = [
-  { day: 1, amount: 500 },
-  { day: 2, amount: 0 },
-  { day: 3, amount: 1200 },
-  { day: 4, amount: 800 },
-  { day: 5, amount: 3500 },
-  { day: 6, amount: 0 },
-  { day: 7, amount: 600 },
-  { day: 8, amount: 1500 },
-  { day: 9, amount: 0 },
-  { day: 10, amount: 1200 },
-  { day: 11, amount: 0 },
-  { day: 12, amount: 900 },
-  { day: 13, amount: 0 },
-  { day: 14, amount: 0 },
-  { day: 15, amount: 2000 },
-  { day: 16, amount: 0 },
-];
 const styles = {
   visualizePage: {
     minHeight: "100vh",
@@ -259,21 +232,139 @@ const styles = {
     color: "#e0e0e0",
     fontSize: "0.875rem",
   },
+  noDataMessage: {
+    textAlign: "center",
+    color: "#a0a0a0",
+    padding: "2rem",
+    fontSize: "1.1rem",
+  },
+  noDataIcon: {
+    fontSize: "3rem",
+    marginBottom: "1rem",
+    display: "block",
+  },
 };
 
 const Visualize = () => {
   const navigate = useNavigate();
   const [selectedMonth, setSelectedMonth] = useState("2023-06");
+  const [expenses, setExpenses] = useState([]);
+  const [categoryData, setCategoryData] = useState([]);
+  const [monthlyData, setMonthlyData] = useState([]);
+  const [stats, setStats] = useState({
+    totalExpenses: 0,
+    averageDaily: 0,
+    highestCategory: "None",
+    categoriesUsed: 0,
+  });
 
-  // Calculate statistics from manual data
-  const totalExpenses = categoryData.reduce((sum, item) => sum + item.value, 0);
-  const averageDaily = totalExpenses / 30;
-  const highestCategory = categoryData.reduce((prev, current) =>
-    prev.value > current.value ? prev : current
-  ).name;
+  // Load expense data from localStorage
+  useEffect(() => {
+    const loadExpenseData = () => {
+      try {
+        const storedExpenses = localStorage.getItem("expenseData");
+        if (storedExpenses) {
+          const parsedExpenses = JSON.parse(storedExpenses);
+          setExpenses(parsedExpenses);
+          processExpenseData(parsedExpenses);
+        }
+      } catch (error) {
+        console.error("Error loading expense data:", error);
+      }
+    };
+
+    loadExpenseData();
+
+    // Listen for storage changes (when expense page updates data)
+    const handleStorageChange = (e) => {
+      if (e.key === "expenseData") {
+        loadExpenseData();
+      }
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, []);
+
+  const processExpenseData = (expenseList) => {
+    if (!expenseList || expenseList.length === 0) {
+      setCategoryData([]);
+      setMonthlyData([]);
+      setStats({
+        totalExpenses: 0,
+        averageDaily: 0,
+        highestCategory: "None",
+        categoriesUsed: 0,
+      });
+      return;
+    }
+
+    // Group expenses by category
+    const categoryTotals = {};
+    expenseList.forEach((expense) => {
+      const category = expense.category;
+      categoryTotals[category] =
+        (categoryTotals[category] || 0) + expense.amount;
+    });
+
+    // Create category data for charts
+    const processedCategoryData = Object.entries(categoryTotals).map(
+      ([name, value]) => ({
+        name,
+        value,
+        color: COLORS[name] || "#84cc16",
+      })
+    );
+
+    // Calculate monthly data (last 30 days)
+    const processedMonthlyData = [];
+    const today = new Date();
+
+    for (let i = 29; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      const dayOfMonth = date.getDate();
+
+      const dayExpenses = expenseList.filter((expense) => {
+        // Parse the formatted date (DD-MMM-YYYY) back to compare
+        const expenseDate = new Date(
+          expense.date.split("-").reverse().join("-")
+        );
+        return expenseDate.toDateString() === date.toDateString();
+      });
+
+      const dayTotal = dayExpenses.reduce(
+        (sum, expense) => sum + expense.amount,
+        0
+      );
+      processedMonthlyData.push({ day: dayOfMonth, amount: dayTotal });
+    }
+
+    const totalExpenses = expenseList.reduce(
+      (sum, expense) => sum + expense.amount,
+      0
+    );
+    const averageDaily = totalExpenses / 30;
+    const highestCategory =
+      processedCategoryData.length > 0
+        ? processedCategoryData.reduce((prev, current) =>
+            prev.value > current.value ? prev : current
+          ).name
+        : "None";
+
+    setCategoryData(processedCategoryData);
+    setMonthlyData(processedMonthlyData);
+    setStats({
+      totalExpenses,
+      averageDaily,
+      highestCategory,
+      categoriesUsed: processedCategoryData.length,
+    });
+  };
 
   const handleLogout = () => {
     localStorage.removeItem("accessToken");
+    localStorage.removeItem("expenseData");
     navigate("/getStarted");
   };
 
@@ -300,6 +391,9 @@ const Visualize = () => {
     }
     return null;
   };
+
+  const hasData = categoryData.length > 0;
+
   return (
     <div style={styles.visualizePage}>
       {/* Navbar */}
@@ -399,7 +493,9 @@ const Visualize = () => {
         <div style={{ ...styles.card, ...styles.headerSection }}>
           <h1 style={styles.headerTitle}>Expense Analytics</h1>
           <p style={styles.headerSubtitle}>
-            Analyze your spending patterns with detailed charts
+            {hasData
+              ? "Analyze your spending patterns with detailed charts"
+              : "Add some expenses to see your analytics"}
           </p>
           <Link
             to="/expense"
@@ -415,164 +511,179 @@ const Visualize = () => {
             <FaArrowLeft /> Back to Expenses
           </Link>
         </div>
-        {/* Month Selector */}
-        <div style={styles.card}>
-          <div style={styles.cardHeader}>
-            <h2 style={styles.cardTitle}>
-              <FaCalendarAlt style={styles.cardIcon} /> Select Month
-            </h2>
-          </div>
-          <div style={styles.cardBody}>
-            <div style={styles.monthSelector}>
-              <label>Month:</label>
-              <input
-                type="month"
-                value={selectedMonth}
-                onChange={handleMonthChange}
-                style={styles.monthInput}
-              />
-            </div>
-          </div>
-        </div>
 
-        {/* Statistics Cards */}
-        <div style={styles.card}>
-          <div style={styles.cardHeader}>
-            <h2 style={styles.cardTitle}>
-              <FaRupeeSign style={styles.cardIcon} /> Monthly Summary
-            </h2>
-          </div>
-          <div style={styles.cardBody}>
-            <div style={styles.statsGrid}>
-              <div style={styles.statCard}>
-                <div style={styles.statValue}>
-                  Rs. {totalExpenses.toFixed(2)}
-                </div>
-                <div style={styles.statLabel}>Total Expenses</div>
-              </div>
-              <div style={styles.statCard}>
-                <div style={styles.statValue}>
-                  Rs. {averageDaily.toFixed(2)}
-                </div>
-                <div style={styles.statLabel}>Average Daily</div>
-              </div>
-              <div style={styles.statCard}>
-                <div style={styles.statValue}>{highestCategory}</div>
-                <div style={styles.statLabel}>Highest Category</div>
-              </div>
-              <div style={styles.statCard}>
-                <div style={styles.statValue}>{categoryData.length}</div>
-                <div style={styles.statLabel}>Categories Used</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Charts Grid */}
-        <div
-          style={{
-            ...styles.chartGrid,
-            ...(window.innerWidth >= 768 ? styles.chartGridDesktop : {}),
-          }}
-        >
-          {/* Category Breakdown - Pie Chart */}
+        {!hasData ? (
           <div style={styles.card}>
-            <div style={styles.cardHeader}>
-              <h2 style={styles.cardTitle}>
-                <FaChartLine style={styles.cardIcon} /> Category Breakdown
-              </h2>
-            </div>
             <div style={styles.cardBody}>
-              <div style={styles.chartContainer}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={categoryData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, percent }) =>
-                        `${name} ${(percent * 100).toFixed(0)}%`
-                      }
-                      outerRadius={120}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {categoryData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip content={<CustomTooltip />} />
-                  </PieChart>
-                </ResponsiveContainer>
+              <div style={styles.noDataMessage}>
+                <span style={styles.noDataIcon}>📊</span>
+                <div>No expense data available yet.</div>
+                <div>Start by adding some expenses to see your analytics!</div>
               </div>
             </div>
           </div>
-
-          {/* Category Comparison - Bar Chart */}
-          <div style={styles.card}>
-            <div style={styles.cardHeader}>
-              <h2 style={styles.cardTitle}>
-                <FaChartLine style={styles.cardIcon} /> Category Comparison
-              </h2>
-            </div>
-            <div style={styles.cardBody}>
-              <div style={styles.chartContainer}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={categoryData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                    <XAxis
-                      dataKey="name"
-                      tick={{ fill: "#e0e0e0", fontSize: 12 }}
-                      axisLine={{ stroke: "#333" }}
-                    />
-                    <YAxis
-                      tick={{ fill: "#e0e0e0", fontSize: 12 }}
-                      axisLine={{ stroke: "#333" }}
-                    />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Bar dataKey="value" fill="#14b8a6" />
-                  </BarChart>
-                </ResponsiveContainer>
+        ) : (
+          <>
+            {/* Month Selector */}
+            <div style={styles.card}>
+              <div style={styles.cardHeader}>
+                <h2 style={styles.cardTitle}>
+                  <FaCalendarAlt style={styles.cardIcon} /> Select Month
+                </h2>
+              </div>
+              <div style={styles.cardBody}>
+                <div style={styles.monthSelector}>
+                  <label>Month:</label>
+                  <input
+                    type="month"
+                    value={selectedMonth}
+                    onChange={handleMonthChange}
+                    style={styles.monthInput}
+                  />
+                </div>
               </div>
             </div>
-          </div>
-        </div>
 
-        {/* Daily Spending Trend - Line Chart */}
-        <div style={styles.card}>
-          <div style={styles.cardHeader}>
-            <h2 style={styles.cardTitle}>
-              <FaChartLine style={styles.cardIcon} /> Daily Spending Trend
-            </h2>
-          </div>
-          <div style={styles.cardBody}>
-            <div style={styles.chartContainer}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={monthlyData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                  <XAxis
-                    dataKey="day"
-                    tick={{ fill: "#e0e0e0", fontSize: 12 }}
-                    axisLine={{ stroke: "#333" }}
-                  />
-                  <YAxis
-                    tick={{ fill: "#e0e0e0", fontSize: 12 }}
-                    axisLine={{ stroke: "#333" }}
-                  />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Line
-                    type="monotone"
-                    dataKey="amount"
-                    stroke="#14b8a6"
-                    strokeWidth={2}
-                    dot={{ fill: "#14b8a6", strokeWidth: 2, r: 4 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+            {/* Statistics Cards */}
+            <div style={styles.card}>
+              <div style={styles.cardHeader}>
+                <h2 style={styles.cardTitle}>
+                  <FaRupeeSign style={styles.cardIcon} /> Monthly Summary
+                </h2>
+              </div>
+              <div style={styles.cardBody}>
+                <div style={styles.statsGrid}>
+                  <div style={styles.statCard}>
+                    <div style={styles.statValue}>
+                      Rs. {stats.totalExpenses.toFixed(2)}
+                    </div>
+                    <div style={styles.statLabel}>Total Expenses</div>
+                  </div>
+                  <div style={styles.statCard}>
+                    <div style={styles.statValue}>
+                      Rs. {stats.averageDaily.toFixed(2)}
+                    </div>
+                    <div style={styles.statLabel}>Average Daily</div>
+                  </div>
+                  <div style={styles.statCard}>
+                    <div style={styles.statValue}>{stats.highestCategory}</div>
+                    <div style={styles.statLabel}>Highest Category</div>
+                  </div>
+                  <div style={styles.statCard}>
+                    <div style={styles.statValue}>{stats.categoriesUsed}</div>
+                    <div style={styles.statLabel}>Categories Used</div>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+
+            {/* Charts Grid */}
+            <div
+              style={{
+                ...styles.chartGrid,
+                ...(window.innerWidth >= 768 ? styles.chartGridDesktop : {}),
+              }}
+            >
+              {/* Category Breakdown - Pie Chart */}
+              <div style={styles.card}>
+                <div style={styles.cardHeader}>
+                  <h2 style={styles.cardTitle}>
+                    <FaChartLine style={styles.cardIcon} /> Category Breakdown
+                  </h2>
+                </div>
+                <div style={styles.cardBody}>
+                  <div style={styles.chartContainer}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={categoryData}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ name, percent }) =>
+                            `${name} ${(percent * 100).toFixed(0)}%`
+                          }
+                          outerRadius={120}
+                          fill="#8884d8"
+                          dataKey="value"
+                        >
+                          {categoryData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip content={<CustomTooltip />} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+
+              {/* Category Comparison - Bar Chart */}
+              <div style={styles.card}>
+                <div style={styles.cardHeader}>
+                  <h2 style={styles.cardTitle}>
+                    <FaChartLine style={styles.cardIcon} /> Category Comparison
+                  </h2>
+                </div>
+                <div style={styles.cardBody}>
+                  <div style={styles.chartContainer}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={categoryData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                        <XAxis
+                          dataKey="name"
+                          tick={{ fill: "#e0e0e0", fontSize: 12 }}
+                          axisLine={{ stroke: "#333" }}
+                        />
+                        <YAxis
+                          tick={{ fill: "#e0e0e0", fontSize: 12 }}
+                          axisLine={{ stroke: "#333" }}
+                        />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Bar dataKey="value" fill="#14b8a6" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Daily Spending Trend - Line Chart */}
+            <div style={styles.card}>
+              <div style={styles.cardHeader}>
+                <h2 style={styles.cardTitle}>
+                  <FaChartLine style={styles.cardIcon} /> Daily Spending Trend
+                </h2>
+              </div>
+              <div style={styles.cardBody}>
+                <div style={styles.chartContainer}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={monthlyData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                      <XAxis
+                        dataKey="day"
+                        tick={{ fill: "#e0e0e0", fontSize: 12 }}
+                        axisLine={{ stroke: "#333" }}
+                      />
+                      <YAxis
+                        tick={{ fill: "#e0e0e0", fontSize: 12 }}
+                        axisLine={{ stroke: "#333" }}
+                      />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Line
+                        type="monotone"
+                        dataKey="amount"
+                        stroke="#14b8a6"
+                        strokeWidth={2}
+                        dot={{ fill: "#14b8a6", strokeWidth: 2, r: 4 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

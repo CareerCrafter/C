@@ -104,7 +104,6 @@ const Dashboard = () => {
 
   useEffect(() => {
     const checkAuth = async () => {
-      toast.dismiss();
       const token = localStorage.getItem("accessToken");
 
       if (!token) {
@@ -161,10 +160,11 @@ const Dashboard = () => {
 
   const handleLogout = () => {
     localStorage.removeItem("accessToken");
-    toast.success("Logged out successfully");
+
+    // Show toast for at least 3 seconds
+    toast.success("Logged out successfully", { duration: 3000 });
     navigate("/getStarted");
   };
-
   if (loading) {
     return (
       <ThemeProvider theme={darkTheme}>
