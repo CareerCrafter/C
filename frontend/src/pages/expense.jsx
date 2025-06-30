@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import axios from "axios";
+import toast from "react-hot-toast";
 import {
   FaPlus,
   FaTimes,
@@ -15,12 +17,317 @@ import {
   FaSignOutAlt,
   FaHome,
   FaCog,
+  FaGoogleDrive,
+  FaExternalLinkAlt,
 } from "react-icons/fa";
 
 // Define your API Base URL here
-const API_BASE_URL = "http://localhost:5000/api"; // **IMPORTANT: Replace with your actual backend API URL**
+const API_BASE_URL = "http://localhost:5050";
 
-// Updated styles to match dashboard navbar pattern
+// Google Drive configuration - REPLACE WITH YOUR ACTUAL FOLDER ID
+const GOOGLE_DRIVE_CONFIG = {
+  FOLDER_ID: "1ABC123DEF456GHI789JKL", // Replace with your actual Google Drive folder ID
+  FOLDER_URL:
+    "https://drive.google.com/drive/folders/1O85f_L5042SDJMCEXpoI_h8v5IeuGU4g?usp=sharing",
+};
+
+// Helper function to get authorization header from localStorage
+const getAuthHeaders = () => {
+  const accessToken = localStorage.getItem("accessToken");
+  return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+};
+
+// Edit Modal Component (keeping your existing modal)
+const EditExpenseModal = ({ expense, isOpen, onClose, onSave }) => {
+  const [formData, setFormData] = useState({
+    category: "",
+    amount: "",
+    date: "",
+    notes: "",
+  });
+  const [loading, setLoading] = useState(false);
+
+  const expenseTypes = [
+    "Rent",
+    "Groceries",
+    "Entertainment",
+    "Utilities",
+    "Transportation",
+    "Miscellaneous",
+  ];
+
+  useEffect(() => {
+    if (expense) {
+      const dateForInput = expense.date
+        ? new Date(expense.date.split("-").reverse().join("-"))
+            .toISOString()
+            .split("T")[0]
+        : "";
+
+      setFormData({
+        category: expense.category || "",
+        amount: expense.amount?.toString() || "",
+        date: dateForInput,
+        notes: expense.notes || "",
+      });
+    }
+  }, [expense]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!expense) return;
+
+    setLoading(true);
+    try {
+      await onSave(expense.id, {
+        category: formData.category,
+        amount: Number.parseFloat(formData.amount),
+        date: formData.date,
+        notes: formData.notes,
+      });
+      onClose();
+    } catch (error) {
+      console.error("Error updating expense:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!isOpen || !expense) return null;
+
+  const modalStyles = {
+    overlay: {
+      position: "fixed",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: "rgba(0, 0, 0, 0.7)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 1000,
+    },
+    modal: {
+      backgroundColor: "#1e1e1e",
+      borderRadius: "0.75rem",
+      boxShadow: "0 2px 8px rgba(0, 0, 0, 0.2)",
+      width: "90%",
+      maxWidth: "500px",
+      maxHeight: "90vh",
+      overflow: "auto",
+    },
+    header: {
+      padding: "1rem 1.5rem",
+      borderBottom: "1px solid #333",
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    title: {
+      fontSize: "1.25rem",
+      fontWeight: 600,
+      color: "#e0e0e0",
+      margin: 0,
+    },
+    closeButton: {
+      background: "transparent",
+      border: "none",
+      color: "#a0a0a0",
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "0.5rem",
+      borderRadius: "0.25rem",
+    },
+    body: {
+      padding: "1.5rem",
+    },
+    formGroup: {
+      display: "flex",
+      flexDirection: "column",
+      gap: "0.5rem",
+      marginBottom: "1rem",
+    },
+    label: {
+      fontSize: "0.875rem",
+      fontWeight: 500,
+      color: "#e0e0e0",
+    },
+    inputContainer: {
+      position: "relative",
+    },
+    inputIcon: {
+      position: "absolute",
+      left: "0.75rem",
+      top: "50%",
+      transform: "translateY(-50%)",
+      color: "#a0a0a0",
+    },
+    input: {
+      width: "100%",
+      padding: "0.625rem 0.75rem 0.625rem 2.25rem",
+      border: "1px solid #333",
+      borderRadius: "0.375rem",
+      backgroundColor: "#2c2c2c",
+      color: "#e0e0e0",
+      fontSize: "0.875rem",
+      boxSizing: "border-box",
+    },
+    select: {
+      width: "100%",
+      padding: "0.625rem 0.75rem 0.625rem 2.25rem",
+      border: "1px solid #333",
+      borderRadius: "0.375rem",
+      backgroundColor: "#2c2c2c",
+      color: "#e0e0e0",
+      fontSize: "0.875rem",
+      boxSizing: "border-box",
+    },
+    actions: {
+      display: "flex",
+      justifyContent: "flex-end",
+      gap: "0.75rem",
+      marginTop: "1.5rem",
+    },
+    button: {
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "0.5rem 1rem",
+      borderRadius: "0.375rem",
+      fontWeight: 500,
+      cursor: "pointer",
+      transition: "all 0.2s",
+      border: "none",
+      fontSize: "0.875rem",
+    },
+    cancelButton: {
+      backgroundColor: "transparent",
+      border: "1px solid #333",
+      color: "#e0e0e0",
+    },
+    saveButton: {
+      backgroundColor: "#14b8a6",
+      color: "#000",
+    },
+  };
+
+  return (
+    <div style={modalStyles.overlay} onClick={onClose}>
+      <div style={modalStyles.modal} onClick={(e) => e.stopPropagation()}>
+        <div style={modalStyles.header}>
+          <h2 style={modalStyles.title}>Edit Expense</h2>
+          <button
+            style={modalStyles.closeButton}
+            onClick={onClose}
+            type="button"
+          >
+            <FaTimes />
+          </button>
+        </div>
+
+        <div style={modalStyles.body}>
+          <form onSubmit={handleSubmit}>
+            <div style={modalStyles.formGroup}>
+              <label style={modalStyles.label}>Expense Type</label>
+              <div style={modalStyles.inputContainer}>
+                <FaTag style={modalStyles.inputIcon} />
+                <select
+                  style={modalStyles.select}
+                  value={formData.category}
+                  onChange={(e) =>
+                    setFormData({ ...formData, category: e.target.value })
+                  }
+                  required
+                >
+                  <option value="">Select expense type</option>
+                  {expenseTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div style={modalStyles.formGroup}>
+              <label style={modalStyles.label}>Amount (Rs.)</label>
+              <div style={modalStyles.inputContainer}>
+                <FaRupeeSign style={modalStyles.inputIcon} />
+                <input
+                  type="number"
+                  style={modalStyles.input}
+                  value={formData.amount}
+                  onChange={(e) =>
+                    setFormData({ ...formData, amount: e.target.value })
+                  }
+                  placeholder="Enter amount"
+                  required
+                  min="0"
+                  step="0.01"
+                />
+              </div>
+            </div>
+
+            <div style={modalStyles.formGroup}>
+              <label style={modalStyles.label}>Date</label>
+              <div style={modalStyles.inputContainer}>
+                <FaCalendarAlt style={modalStyles.inputIcon} />
+                <input
+                  type="date"
+                  style={modalStyles.input}
+                  value={formData.date}
+                  onChange={(e) =>
+                    setFormData({ ...formData, date: e.target.value })
+                  }
+                  required
+                />
+              </div>
+            </div>
+
+            <div style={modalStyles.formGroup}>
+              <label style={modalStyles.label}>Notes (Optional)</label>
+              <div style={modalStyles.inputContainer}>
+                <FaStickyNote style={modalStyles.inputIcon} />
+                <input
+                  type="text"
+                  style={modalStyles.input}
+                  value={formData.notes}
+                  onChange={(e) =>
+                    setFormData({ ...formData, notes: e.target.value })
+                  }
+                  placeholder="Add notes"
+                />
+              </div>
+            </div>
+
+            <div style={modalStyles.actions}>
+              <button
+                type="button"
+                style={{ ...modalStyles.button, ...modalStyles.cancelButton }}
+                onClick={onClose}
+                disabled={loading}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                style={{ ...modalStyles.button, ...modalStyles.saveButton }}
+                disabled={loading}
+              >
+                {loading ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Your existing styles object (keeping it as is from your provided code)
 const styles = {
   expensePage: {
     minHeight: "100vh",
@@ -395,6 +702,24 @@ const styles = {
     fontSize: "1.125rem",
     fontWeight: 500,
   },
+  uploadButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.5rem",
+    padding: "0.75rem 1.5rem",
+    backgroundColor: "#4285f4",
+    color: "#ffffff",
+    border: "none",
+    borderRadius: "0.375rem",
+    cursor: "pointer",
+    fontSize: "0.875rem",
+    fontWeight: 500,
+    transition: "background-color 0.2s",
+    textDecoration: "none",
+  },
+  uploadButtonHover: {
+    backgroundColor: "#3367d6",
+  },
   visualizationSection: {
     textAlign: "center",
     padding: "2rem 0",
@@ -429,20 +754,6 @@ const styles = {
   },
 };
 
-// Add keyframes
-const keyframes = `
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-      transform: translateY(-10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-`;
-
 const Expense = () => {
   const navigate = useNavigate();
   const [showAddExpense, setShowAddExpense] = useState(false);
@@ -454,27 +765,60 @@ const Expense = () => {
   const [notes, setNotes] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [showError, setShowError] = useState(false);
-  const [expenses, setExpenses] = useState([]); // Initialize with empty array
+  const [expenses, setExpenses] = useState([]);
+
+  // Edit modal state
+  const [editingExpense, setEditingExpense] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
 
   const expenseTypes = [
     "Rent",
     "Groceries",
     "Entertainment",
     "Utilities",
-    "Transport",
+    "Transportation",
     "Miscellaneous",
   ];
 
   function getCurrentDate() {
     const today = new Date();
-    const yyyy = today.getFullYear();
-    const mm = String(today.getMonth() + 1).padStart(2, "0");
-    const dd = String(today.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, "0");
+    const day = String(today.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
   }
 
+  // API Call: Fetch Expenses
+  const fetchExpenses = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/expense/list`, {
+        headers: getAuthHeaders(),
+      });
+      const formattedExpenses = response.data.map((exp) => ({
+        ...exp,
+        id: exp._id || exp.id,
+        date: formatDate(exp.date),
+        status: exp.status || "Normal",
+      }));
+      setExpenses(formattedExpenses);
+
+      // Store expenses in localStorage for visualization page
+      localStorage.setItem("expenseData", JSON.stringify(formattedExpenses));
+    } catch (error) {
+      console.error("Error fetching expenses:", error);
+      toast.error(error.response?.data?.message || "Failed to load expenses.");
+    }
+  };
+
+  // Run on component mount
+  useEffect(() => {
+    fetchExpenses();
+  }, []);
+
   const handleLogout = () => {
-    localStorage.removeItem("accessToken"); // Remove token on logout
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("expenseData"); // Clear expense data on logout
+    toast.success("Logged out successfully.");
     navigate("/getStarted");
   };
 
@@ -482,7 +826,6 @@ const Expense = () => {
     setShowAddExpense(!showAddExpense);
     setShowDropdown(false);
     if (!showAddExpense) {
-      // Reset form fields when opening the form
       setExpenseType("");
       setAmount("");
       setDate(getCurrentDate());
@@ -505,6 +848,10 @@ const Expense = () => {
   };
 
   const formatDate = (dateString) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    if (isNaN(date)) return dateString;
+
     const months = [
       "Jan",
       "Feb",
@@ -519,44 +866,14 @@ const Expense = () => {
       "Nov",
       "Dec",
     ];
-    const date = new Date(dateString);
     const day = date.getDate();
     const month = months[date.getMonth()];
     const year = date.getFullYear();
-    return `${day} ${month}, ${year}`;
+    return `${day}-${month}-${year}`;
   };
 
-  const fetchExpenses = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/expenses`, {
-        headers: {
-          // Add authorization header if your API requires it
-          // 'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-        },
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to fetch expenses");
-      }
-
-      const data = await response.json();
-      // Assuming your backend sends dates in a format that needs formatting for display
-      const formattedExpenses = data.map((exp) => ({
-        ...exp,
-        date: formatDate(exp.date), // Format date for display
-        status: exp.status || "Normal", // Assign a default status if not provided by backend
-      }));
-      setExpenses(formattedExpenses);
-    } catch (error) {
-      console.error("Error fetching expenses:", error);
-      setErrorMessage(error.message || "Failed to load expenses.");
-      setShowError(true);
-      setTimeout(() => setShowError(false), 3000);
-    }
-  };
-
-  const addExpense = async () => {
+  // API Call: Add Expense
+  const handleAddExpense = async () => {
     if (!expenseType || !amount || !date) {
       setErrorMessage("Please fill all required fields!");
       setShowError(true);
@@ -567,178 +884,187 @@ const Expense = () => {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/expenses`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          // Add authorization header if your API requires it
-          // 'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-        },
-        body: JSON.stringify({
-          type: expenseType,
-          amount: parseFloat(amount), // Ensure amount is sent as a number
-          date: date,
-          notes: notes,
-        }),
-      });
+      const newExpenseData = {
+        category: expenseType,
+        amount: Number.parseFloat(amount),
+        date: date,
+        notes: notes || "",
+      };
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to add expense");
-      }
-
-      const newExpense = await response.json();
-      // Add the new expense to the state, formatting the date
-      setExpenses([
-        ...expenses,
+      const response = await axios.post(
+        `${API_BASE_URL}/expense/add`,
+        newExpenseData,
         {
-          ...newExpense,
-          date: formatDate(newExpense.date),
-          status: newExpense.status || "Normal",
-        },
-      ]);
-      setErrorMessage("Expense added successfully!"); // Success message
-      setShowError(true);
-      setTimeout(() => setShowError(false), 3000);
+          headers: {
+            "Content-Type": "application/json",
+            ...getAuthHeaders(),
+          },
+        }
+      );
 
-      // Reset form after successful addition
+      const expenseId =
+        response.data._id || response.data.id || response.data.expenseId;
+      const newExpense = {
+        id: expenseId,
+        _id: expenseId,
+        category: expenseType,
+        amount: Number.parseFloat(amount),
+        date: formatDate(date),
+        status: "Normal",
+        notes: notes || "",
+      };
+
+      const updatedExpenses = [newExpense, ...expenses];
+      setExpenses(updatedExpenses);
+
+      // Update localStorage for visualization page
+      localStorage.setItem("expenseData", JSON.stringify(updatedExpenses));
+
+      toast.success("Expense added successfully!");
+
+      // Reset form fields
       setExpenseType("");
       setAmount("");
       setDate(getCurrentDate());
       setNotes("");
       setShowAddExpense(false);
+      setErrorMessage("");
+      setShowError(false);
     } catch (error) {
       console.error("Error adding expense:", error);
-      setErrorMessage(error.message || "Failed to add expense.");
-      setShowError(true);
-      setTimeout(() => {
-        setShowError(false);
-      }, 3000);
+      toast.error(
+        error.response?.data?.message ||
+          error?.message ||
+          "Failed to add expense."
+      );
     }
   };
 
-  const deleteExpense = async (id) => {
-    if (window.confirm("Are you sure you want to delete this expense?")) {
-      try {
-        const response = await fetch(`${API_BASE_URL}/expenses/${id}`, {
-          method: "DELETE",
+  // API Call: Update Expense
+  const handleUpdateExpense = async (id, expenseData) => {
+    try {
+      const expense = expenses.find((exp) => exp.id === id || exp._id === id);
+      if (!expense) {
+        toast.error("Expense not found");
+        return;
+      }
+
+      const updateId = expense._id || expense.id;
+      await axios.put(
+        `${API_BASE_URL}/expense/update/${updateId}`,
+        expenseData,
+        {
           headers: {
-            // Add authorization header if your API requires it
-            // 'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+            "Content-Type": "application/json",
+            ...getAuthHeaders(),
           },
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || "Failed to delete expense");
         }
+      );
 
-        setExpenses(expenses.filter((expense) => expense.id !== id));
-        setErrorMessage("Expense deleted successfully!"); // Success message
-        setShowError(true);
-        setTimeout(() => setShowError(false), 3000);
-      } catch (error) {
-        console.error("Error deleting expense:", error);
-        setErrorMessage(error.message || "Failed to delete expense.");
-        setShowError(true);
-        setTimeout(() => {
-          setShowError(false);
-        }, 3000);
-      }
+      const updatedExpense = {
+        ...expense,
+        ...expenseData,
+        date: expenseData.date ? formatDate(expenseData.date) : expense.date,
+      };
+
+      const updatedExpenses = expenses.map((exp) =>
+        exp.id === id || exp._id === id ? updatedExpense : exp
+      );
+
+      setExpenses(updatedExpenses);
+
+      // Update localStorage for visualization page
+      localStorage.setItem("expenseData", JSON.stringify(updatedExpenses));
+
+      toast.success("Expense updated successfully!");
+    } catch (error) {
+      console.error("Error updating expense:", error);
+      toast.error(error.response?.data?.message || "Failed to update expense.");
+      throw error;
     }
   };
 
-  const handleUploadReceipt = async () => {
-    setErrorMessage("Functionality to upload receipts is not yet implemented.");
-    setShowError(true);
-    setTimeout(() => setShowError(false), 3000);
-
-    // **Placeholder for actual file upload logic:**
-    // You would typically use FormData to send files to the backend.
-    // Example:
-    /*
-    const formData = new FormData();
-    formData.append('receipt', yourFileInput.files[0]); // assuming you have an input type="file"
-
+  // API Call: Delete Expense
+  const handleDeleteExpense = async (id) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/upload-receipt`, {
-        method: "POST",
-        body: formData,
-        headers: {
-          // 'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-          // 'Content-Type': 'multipart/form-data' is usually set automatically by fetch/axios with FormData
-        },
+      const expense = expenses.find((exp) => exp.id === id || exp._id === id);
+      if (!expense) {
+        toast.error("Expense not found in local state");
+        return;
+      }
+
+      const deleteId = expense._id || expense.id;
+      await axios.delete(`${API_BASE_URL}/expense/delete/${deleteId}`, {
+        headers: getAuthHeaders(),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Receipt upload failed");
-      }
+      const updatedExpenses = expenses.filter(
+        (expense) => expense.id !== id && expense._id !== id
+      );
+      setExpenses(updatedExpenses);
 
-      setErrorMessage("Receipt uploaded successfully!");
-      // You might want to refresh expenses or add the parsed expense
-      // fetchExpenses();
+      // Update localStorage for visualization page
+      localStorage.setItem("expenseData", JSON.stringify(updatedExpenses));
+
+      toast.success("Expense deleted successfully!");
     } catch (error) {
-      console.error("Upload error:", error);
-      setErrorMessage(error.message || "Failed to upload receipt.");
-    } finally {
-      setTimeout(() => setShowError(false), 3000);
-    }
-    */
-  };
+      console.error("Error deleting expense:", error);
 
-  const handleViewCharts = async () => {
-    setErrorMessage("Expense visualization feature is not yet implemented.");
-    setShowError(true);
-    setTimeout(() => setShowError(false), 3000);
-
-    // **Placeholder for fetching data for visualizations:**
-    /*
-    try {
-      const response = await fetch(`${API_BASE_URL}/expense-summary`, { // Example endpoint for chart data
-        method: "GET",
-        headers: {
-          // 'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-        },
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to fetch chart data");
+      if (
+        error.response?.status === 404 ||
+        error.response?.data?.message?.includes("Invalid")
+      ) {
+        const updatedExpenses = expenses.filter(
+          (expense) => expense.id !== id && expense._id !== id
+        );
+        setExpenses(updatedExpenses);
+        localStorage.setItem("expenseData", JSON.stringify(updatedExpenses));
+        toast.success("Expense deleted successfully!");
+      } else {
+        toast.error(
+          error.response?.data?.message || "Failed to delete expense"
+        );
       }
-
-      const chartData = await response.json();
-      console.log("Chart data received:", chartData);
-      // You would then use this 'chartData' to render your charts
-      // (e.g., using a charting library like Chart.js, Recharts, Nivo, etc.)
-      setErrorMessage("Charts generated successfully!");
-    } catch (error) {
-      console.error("Chart data fetch error:", error);
-      setErrorMessage(error.message || "Failed to generate charts.");
-    } finally {
-      setTimeout(() => setShowError(false), 3000);
-    }
-    */
-  };
-
-  // Add keyframes to document
-  const addKeyframesToDocument = () => {
-    if (typeof document !== "undefined") {
-      const styleElement = document.createElement("style");
-      styleElement.innerHTML = keyframes;
-      document.head.appendChild(styleElement);
     }
   };
 
-  // Run on component mount
-  useEffect(() => {
-    addKeyframesToDocument();
-    fetchExpenses(); // Fetch expenses when the component mounts
-  }, []); // Empty dependency array ensures this runs only once
+  const handleEditExpense = (expense) => {
+    setEditingExpense(expense);
+    setShowEditModal(true);
+  };
+
+  const handleSaveEdit = async (id, data) => {
+    await handleUpdateExpense(id, data);
+    setShowEditModal(false);
+    setEditingExpense(null);
+  };
+
+  // Fixed Google Drive redirect function
+  const handleUploadReceipt = () => {
+    const driveUrl = `${GOOGLE_DRIVE_CONFIG.FOLDER_URL}${GOOGLE_DRIVE_CONFIG.FOLDER_ID}`;
+    console.log("Opening Google Drive URL:", driveUrl); // Debug log
+
+    // Open in new tab with proper settings
+    const newWindow = window.open(driveUrl, "_blank", "noopener,noreferrer");
+
+    // Check if popup was blocked
+    if (
+      !newWindow ||
+      newWindow.closed ||
+      typeof newWindow.closed === "undefined"
+    ) {
+      // Fallback: try direct navigation
+      window.location.href = driveUrl;
+    }
+  };
+
+  const handleViewCharts = () => {
+    navigate("/visualize");
+  };
 
   return (
     <div style={styles.expensePage}>
-      {/* Navbar with Expense highlighted */}
+      {/* Navbar */}
       <nav style={styles.navbar}>
         <div style={{ ...styles.container, ...styles.navbarContainer }}>
           <Link to="/dashboard" style={styles.logo}>
@@ -826,7 +1152,6 @@ const Expense = () => {
       <div style={{ ...styles.container, ...styles.mainContent }}>
         {/* Welcome Section */}
         <div style={{ ...styles.card, ...styles.welcomeSection }}>
-          <h1 style={styles.welcomeTitle}>Welcome, User!</h1>
           <p style={styles.welcomeSubtitle}>
             Track and manage your expenses efficiently
           </p>
@@ -885,7 +1210,7 @@ const Expense = () => {
                 ) : (
                   expenses.map((expense) => (
                     <tr key={expense.id}>
-                      <td style={styles.tableCell}>{expense.type}</td>
+                      <td style={styles.tableCell}>{expense.category}</td>
                       <td style={styles.tableCell}>Rs. {expense.amount}</td>
                       <td style={styles.tableCell}>{expense.date}</td>
                       <td style={styles.tableCell}>
@@ -912,14 +1237,7 @@ const Expense = () => {
                               (e.currentTarget.style.backgroundColor =
                                 styles.iconButton.backgroundColor)
                             }
-                            // Add onClick for edit functionality (placeholder)
-                            onClick={() => {
-                              setErrorMessage(
-                                "Edit functionality not implemented yet."
-                              );
-                              setShowError(true);
-                              setTimeout(() => setShowError(false), 3000);
-                            }}
+                            onClick={() => handleEditExpense(expense)}
                           >
                             <FaEdit style={styles.iconSmall} />
                           </button>
@@ -936,7 +1254,7 @@ const Expense = () => {
                               (e.currentTarget.style.color =
                                 styles.btnDelete.color)
                             }
-                            onClick={() => deleteExpense(expense.id)}
+                            onClick={() => handleDeleteExpense(expense.id)}
                           >
                             <FaTrashAlt style={styles.iconSmall} />
                           </button>
@@ -1019,13 +1337,19 @@ const Expense = () => {
                           >
                             <FaTag style={styles.inputIcon} />
                             <span style={styles.dropdownPlaceholder}>
-                              {expenseType || "Select or type expense type"}
+                              {expenseType || "Select expense type"}
                             </span>
                             <span style={styles.dropdownArrow}>▼</span>
                           </div>
 
                           {showDropdown && (
-                            <div style={styles.dropdownMenu}>
+                            <div
+                              style={{
+                                ...styles.dropdownMenu,
+                                maxHeight: "200px",
+                                overflowY: "auto",
+                              }}
+                            >
                               {expenseTypes.map((type) => (
                                 <div
                                   key={type}
@@ -1051,7 +1375,8 @@ const Expense = () => {
                       <div style={styles.formGroup}>
                         <label style={styles.formLabel}>Amount (Rs.)</label>
                         <div style={styles.inputContainer}>
-                          <FaRupeeSign style={styles.inputIcon} />
+                          <span style={styles.inputIcon}>रु</span>
+
                           <input
                             type="number"
                             placeholder="Enter amount"
@@ -1138,7 +1463,7 @@ const Expense = () => {
                           (e.currentTarget.style.backgroundColor =
                             styles.btnPrimary.backgroundColor)
                         }
-                        onClick={addExpense}
+                        onClick={handleAddExpense}
                       >
                         Add Expense
                       </button>
@@ -1153,20 +1478,25 @@ const Expense = () => {
                     <h3 style={styles.uploadTitle}>
                       Upload Bills and Manage Expenses
                     </h3>
-                    <button
-                      style={{ ...styles.btn, ...styles.btnPrimary }}
+                    <a
+                      href={`${GOOGLE_DRIVE_CONFIG.FOLDER_URL}${GOOGLE_DRIVE_CONFIG.FOLDER_ID}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={styles.uploadButton}
                       onMouseOver={(e) =>
                         (e.currentTarget.style.backgroundColor =
-                          styles.btnPrimaryHover.backgroundColor)
+                          styles.uploadButtonHover.backgroundColor)
                       }
                       onMouseOut={(e) =>
                         (e.currentTarget.style.backgroundColor =
-                          styles.btnPrimary.backgroundColor)
+                          styles.uploadButton.backgroundColor)
                       }
-                      onClick={handleUploadReceipt} // Call the new handler
+                      onClick={handleUploadReceipt}
                     >
-                      Start Now
-                    </button>
+                      <FaGoogleDrive />
+                      Open Google Drive Folder
+                      <FaExternalLinkAlt size={12} />
+                    </a>
                   </div>
                 )}
               </div>
@@ -1196,13 +1526,24 @@ const Expense = () => {
                 (e.currentTarget.style.backgroundColor =
                   styles.btnPrimary.backgroundColor)
               }
-              onClick={handleViewCharts} // Call the new handler
+              onClick={handleViewCharts}
             >
               <FaChartLine style={styles.btnIcon} /> View Charts
             </button>
           </div>
         </div>
       </div>
+
+      {/* Edit Modal */}
+      <EditExpenseModal
+        expense={editingExpense}
+        isOpen={showEditModal}
+        onClose={() => {
+          setShowEditModal(false);
+          setEditingExpense(null);
+        }}
+        onSave={handleSaveEdit}
+      />
     </div>
   );
 };

@@ -1,5 +1,5 @@
 "use client";
-
+import { jwtDecode } from "jwt-decode";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -27,18 +27,13 @@ import {
   Settings,
   Wand,
 } from "lucide-react";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 
-// Create dark theme
 const darkTheme = createTheme({
   palette: {
     mode: "dark",
-    primary: {
-      main: "#14b8a6",
-    },
-    secondary: {
-      main: "#a5f3fc",
-    },
+    primary: { main: "#14b8a6" },
+    secondary: { main: "#a5f3fc" },
     background: {
       default: "#121212",
       paper: "#1e1e1e",
@@ -71,7 +66,6 @@ const darkTheme = createTheme({
   },
 });
 
-// Feature card data
 const featureCards = [
   {
     title: "Upload Bills and Manage Expenses",
@@ -107,7 +101,6 @@ const Dashboard = () => {
   useEffect(() => {
     const checkAuth = async () => {
       const token = localStorage.getItem("accessToken");
-
       if (!token) {
         toast.error("Please login to access the dashboard");
         navigate("/");
@@ -115,12 +108,17 @@ const Dashboard = () => {
       }
 
       try {
-        setUser({ email: "user@example.com" });
+        const decoded = jwtDecode(token);
+        console.log("Decoded token:", decoded); // ✅ DEBUG LINE
+
+        const fullName = decoded.fullName || decoded.name || decoded.email;
+        setUser({ email: decoded.email, fullName });
       } catch (error) {
         console.error("Authentication error:", error);
         toast.error("Session expired. Please login again.");
         localStorage.removeItem("accessToken");
         navigate("/");
+        return;
       } finally {
         setLoading(false);
       }
@@ -128,6 +126,7 @@ const Dashboard = () => {
 
     checkAuth();
 
+    // Animation effect
     const handleScroll = () => {
       const cards = document.querySelectorAll(".feature-card");
       cards.forEach((card) => {
@@ -154,15 +153,12 @@ const Dashboard = () => {
 
     setTimeout(handleScroll, 100);
     window.addEventListener("scroll", handleScroll);
-
-    return () => {
-      window.removeEventListener("scroll", handleScroll);
-    };
+    return () => window.removeEventListener("scroll", handleScroll);
   }, [navigate]);
 
   const handleLogout = () => {
     localStorage.removeItem("accessToken");
-    toast.success("Logged out successfully");
+    toast.success("Logged out successfully", { duration: 3000 });
     navigate("/getStarted");
   };
 
@@ -189,18 +185,7 @@ const Dashboard = () => {
   return (
     <ThemeProvider theme={darkTheme}>
       <CssBaseline />
-      <Toaster
-        position="top-right"
-        toastOptions={{
-          style: {
-            background: "#333",
-            color: "#fff",
-          },
-        }}
-      />
-
       <Box sx={{ flexGrow: 1, position: "relative", minHeight: "100vh" }}>
-        {/* Dashboard Navbar - Only Home, Services, Dashboard, Logout */}
         <AppBar
           position="static"
           color="transparent"
@@ -258,7 +243,6 @@ const Dashboard = () => {
           </Toolbar>
         </AppBar>
 
-        {/* Main Content */}
         <Container maxWidth="lg" sx={{ mt: 8, mb: 8 }}>
           <Typography variant="h3" component="h1" align="center" gutterBottom>
             Dashboard
@@ -275,12 +259,11 @@ const Dashboard = () => {
                 component="span"
                 sx={{ color: "#14b8a6", fontWeight: "bold" }}
               >
-                {user.email}
+                {user.fullName || user.email}
               </Box>
             </Typography>
           )}
 
-          {/* Feature Cards */}
           <Grid container spacing={4}>
             {featureCards.map((card, index) => (
               <Grid item xs={12} md={4} key={index}>
@@ -310,7 +293,7 @@ const Dashboard = () => {
                     >
                       {card.icon}
                     </Box>
-                    <Typography variant="h5" component="h2" gutterBottom>
+                    <Typography variant="h5" gutterBottom>
                       {card.title}
                     </Typography>
                     <Typography
@@ -343,7 +326,7 @@ const Dashboard = () => {
           </Grid>
         </Container>
 
-        {/* Background Shapes */}
+        {/* Decorative Blurs */}
         <Box
           sx={{
             position: "absolute",

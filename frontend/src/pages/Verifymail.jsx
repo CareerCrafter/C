@@ -17,48 +17,42 @@ const VerifyEmail = () => {
   const [success, setSuccess] = useState(false);
   const navigate = useNavigate();
 
-  // Replace this with your actual API call
   const sendResetEmail = async (email) => {
-    // Example with fetch, adjust URL and method as needed
-    const response = await fetch(
-      "https://your-backend.com/api/send-reset-email",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email }),
-      }
-    );
+    const response = await fetch(`http://localhost:5050/api/reset-password`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email }),
+    });
 
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(errorData.message || "Failed to send reset email");
     }
 
-    return response.json(); // or whatever your backend returns
+    return response.json();
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Simple email regex validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       setError("Please enter a valid email address");
       return;
     }
+
     setError("");
     setLoading(true);
 
     try {
-      // Call your backend API here
       await sendResetEmail(email);
 
       toast.success("Reset password email sent!");
       setSuccess(true);
 
-      // Optionally navigate to a "Check your mail" page:
+      // Navigate to "check mail" page or any other page if you want:
       // navigate("/check-mail");
     } catch (err) {
       toast.error(err.message || "Failed to send reset email. Try again.");

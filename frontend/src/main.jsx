@@ -17,6 +17,10 @@ import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import Expense from "./pages/expense";
 import ForgotPassword from "./pages/ForgotPassword";
+import Verifymail from "./pages/Verifymail";
+import Visualize from "./pages/visualize";
+import ExpenseDataService from "./pages/expenseDataService";
+import Prediction from "./pages/Prediction";
 
 import "./index.css";
 
@@ -47,7 +51,11 @@ const AppContent = () => {
           <Route path="/register" element={<Register />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/expense" element={<Expense />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/verifymail" element={<Verifymail />} />
+          <Route path="/reset-password" element={<ForgotPassword />} />
+          <Route path="/visualize" element={<Visualize />} />
+          <Route path="/expenseDataService" element={<ExpenseDataService />} />
+          <Route path="/Prediction" element={<Prediction />} />
         </Routes>
       </Box>
     </>

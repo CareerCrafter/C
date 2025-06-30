@@ -2,16 +2,22 @@ import mongoose from "mongoose";
 
 const expenseSchema = new mongoose.Schema(
   {
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+
     category: {
       type: String,
       required: true,
       enum: [
-        "utilities",
-        "rent",
-        "groceries",
-        "entertainment",
-        "transportation",
-        "miscellaneous",
+        "Rent",
+        "Groceries",
+        "Entertainment",
+        "Utilities",
+        "Transportation",
+        "Miscellaneous",
       ],
     },
     amount: {
@@ -26,6 +32,9 @@ const expenseSchema = new mongoose.Schema(
     receipt: {
       type: String, // URL or file path
       required: false,
+    },
+    rawText: {
+      type: String,
     },
   },
   { timestamps: true }
