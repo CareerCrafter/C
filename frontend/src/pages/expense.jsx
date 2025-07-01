@@ -17,10 +17,19 @@ import {
   FaSignOutAlt,
   FaHome,
   FaCog,
+  FaGoogleDrive,
+  FaExternalLinkAlt,
 } from "react-icons/fa";
 
 // Define your API Base URL here
 const API_BASE_URL = "http://localhost:5050";
+
+// Google Drive configuration - REPLACE WITH YOUR ACTUAL FOLDER ID
+const GOOGLE_DRIVE_CONFIG = {
+  FOLDER_ID: "1ABC123DEF456GHI789JKL", // Replace with your actual Google Drive folder ID
+  FOLDER_URL:
+    "https://drive.google.com/drive/folders/1O85f_L5042SDJMCEXpoI_h8v5IeuGU4g?usp=sharing",
+};
 
 // Helper function to get authorization header from localStorage
 const getAuthHeaders = () => {
@@ -28,7 +37,7 @@ const getAuthHeaders = () => {
   return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
 };
 
-// Edit Modal Component
+// Edit Modal Component (keeping your existing modal)
 const EditExpenseModal = ({ expense, isOpen, onClose, onSave }) => {
   const [formData, setFormData] = useState({
     category: "",
@@ -49,7 +58,6 @@ const EditExpenseModal = ({ expense, isOpen, onClose, onSave }) => {
 
   useEffect(() => {
     if (expense) {
-      // Convert the formatted date back to YYYY-MM-DD format for the input
       const dateForInput = expense.date
         ? new Date(expense.date.split("-").reverse().join("-"))
             .toISOString()
@@ -694,6 +702,24 @@ const styles = {
     fontSize: "1.125rem",
     fontWeight: 500,
   },
+  uploadButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.5rem",
+    padding: "0.75rem 1.5rem",
+    backgroundColor: "#4285f4",
+    color: "#ffffff",
+    border: "none",
+    borderRadius: "0.375rem",
+    cursor: "pointer",
+    fontSize: "0.875rem",
+    fontWeight: 500,
+    transition: "background-color 0.2s",
+    textDecoration: "none",
+  },
+  uploadButtonHover: {
+    backgroundColor: "#3367d6",
+  },
   visualizationSection: {
     textAlign: "center",
     padding: "2rem 0",
@@ -1013,10 +1039,23 @@ const Expense = () => {
     setEditingExpense(null);
   };
 
-  const handleUploadReceipt = async () => {
-    setErrorMessage("Functionality to upload receipts is not yet implemented.");
-    setShowError(true);
-    setTimeout(() => setShowError(false), 3000);
+  // Fixed Google Drive redirect function
+  const handleUploadReceipt = () => {
+    const driveUrl = `${GOOGLE_DRIVE_CONFIG.FOLDER_URL}${GOOGLE_DRIVE_CONFIG.FOLDER_ID}`;
+    console.log("Opening Google Drive URL:", driveUrl); // Debug log
+
+    // Open in new tab with proper settings
+    const newWindow = window.open(driveUrl, "_blank", "noopener,noreferrer");
+
+    // Check if popup was blocked
+    if (
+      !newWindow ||
+      newWindow.closed ||
+      typeof newWindow.closed === "undefined"
+    ) {
+      // Fallback: try direct navigation
+      window.location.href = driveUrl;
+    }
   };
 
   const handleViewCharts = () => {
@@ -1439,20 +1478,25 @@ const Expense = () => {
                     <h3 style={styles.uploadTitle}>
                       Upload Bills and Manage Expenses
                     </h3>
-                    <button
-                      style={{ ...styles.btn, ...styles.btnPrimary }}
+                    <a
+                      href={`${GOOGLE_DRIVE_CONFIG.FOLDER_URL}${GOOGLE_DRIVE_CONFIG.FOLDER_ID}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={styles.uploadButton}
                       onMouseOver={(e) =>
                         (e.currentTarget.style.backgroundColor =
-                          styles.btnPrimaryHover.backgroundColor)
+                          styles.uploadButtonHover.backgroundColor)
                       }
                       onMouseOut={(e) =>
                         (e.currentTarget.style.backgroundColor =
-                          styles.btnPrimary.backgroundColor)
+                          styles.uploadButton.backgroundColor)
                       }
                       onClick={handleUploadReceipt}
                     >
-                      Start Now
-                    </button>
+                      <FaGoogleDrive />
+                      Open Google Drive Folder
+                      <FaExternalLinkAlt size={12} />
+                    </a>
                   </div>
                 )}
               </div>

@@ -1,3 +1,5 @@
+"use client";
+
 import {
   Box,
   Button,
@@ -14,7 +16,7 @@ import { Link, useNavigate } from "react-router-dom";
 import * as yup from "yup";
 import toast from "react-hot-toast";
 import axios from "axios";
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Visibility, VisibilityOff } from "@mui/icons-material";
 
 const Login = () => {
@@ -41,7 +43,14 @@ const Login = () => {
       setLoading(true);
       const res = await axios.post("http://localhost:5050/user/login", values);
       localStorage.setItem("accessToken", res.data?.accessToken);
-      toast.success("You are logged in successfully.");
+      // Dismiss any existing toasts first, then show success message
+      toast.dismiss();
+      setTimeout(() => {
+        toast.success("You're logged in successfully", {
+          duration: 3000,
+          position: "top-right",
+        });
+      }, 100);
       navigate("/Dashboard");
     } catch (error) {
       console.error("Login failed", error);

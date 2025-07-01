@@ -32,12 +32,8 @@ import toast from "react-hot-toast";
 const darkTheme = createTheme({
   palette: {
     mode: "dark",
-    primary: {
-      main: "#14b8a6",
-    },
-    secondary: {
-      main: "#a5f3fc",
-    },
+    primary: { main: "#14b8a6" },
+    secondary: { main: "#a5f3fc" },
     background: {
       default: "#121212",
       paper: "#1e1e1e",
@@ -105,7 +101,6 @@ const Dashboard = () => {
   useEffect(() => {
     const checkAuth = async () => {
       const token = localStorage.getItem("accessToken");
-
       if (!token) {
         toast.error("Please login to access the dashboard");
         navigate("/");
@@ -114,8 +109,10 @@ const Dashboard = () => {
 
       try {
         const decoded = jwtDecode(token);
-        const name = decoded.fullName || decoded.name || decoded.email;
-        setUser({ email: decoded.email, name: decoded.fullName });
+        console.log("Decoded token:", decoded); // ✅ DEBUG LINE
+
+        const fullName = decoded.fullName || decoded.name || decoded.email;
+        setUser({ email: decoded.email, fullName });
       } catch (error) {
         console.error("Authentication error:", error);
         toast.error("Session expired. Please login again.");
@@ -129,6 +126,7 @@ const Dashboard = () => {
 
     checkAuth();
 
+    // Animation effect
     const handleScroll = () => {
       const cards = document.querySelectorAll(".feature-card");
       cards.forEach((card) => {
@@ -160,8 +158,6 @@ const Dashboard = () => {
 
   const handleLogout = () => {
     localStorage.removeItem("accessToken");
-
-    // Show toast for at least 3 seconds
     toast.success("Logged out successfully", { duration: 3000 });
     navigate("/getStarted");
   };
@@ -262,7 +258,7 @@ const Dashboard = () => {
                 component="span"
                 sx={{ color: "#14b8a6", fontWeight: "bold" }}
               >
-                {user.name || user.email}
+                {user.fullName || user.email}
               </Box>
             </Typography>
           )}
@@ -296,7 +292,7 @@ const Dashboard = () => {
                     >
                       {card.icon}
                     </Box>
-                    <Typography variant="h5" component="h2" gutterBottom>
+                    <Typography variant="h5" gutterBottom>
                       {card.title}
                     </Typography>
                     <Typography
