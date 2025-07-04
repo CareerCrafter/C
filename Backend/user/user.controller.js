@@ -165,10 +165,12 @@ router.post("/user/login", async (req, res) => {
         .status(500)
         .send({ message: "JWT secret key not configured." });
     }
-
-    const payload = { email: user.email, fullName: user.fullName };
+    const payload = {
+      _id: user._id.toString(),
+      email: user.email,
+      fullName: user.fullName,
+    };
     const token = jwt.sign(payload, secretKey, { expiresIn: "7d" });
-
     return res
       .status(200)
       .send({ message: "success", userDetails: user, accessToken: token });

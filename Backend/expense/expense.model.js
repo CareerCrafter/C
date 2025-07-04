@@ -7,7 +7,6 @@ const expenseSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
-
     category: {
       type: String,
       required: true,
@@ -35,6 +34,15 @@ const expenseSchema = new mongoose.Schema(
     },
     rawText: {
       type: String,
+    },
+    status: {
+      type: String,
+      enum: ["Normal", "Anomaly"],
+      default: "Normal",
+    },
+    anomaly_score: {
+      type: Number,
+      default: 0,
     },
   },
   { timestamps: true }

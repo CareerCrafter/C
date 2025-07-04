@@ -41,8 +41,19 @@ const Login = () => {
   const handleSubmit = async (values) => {
     try {
       setLoading(true);
-      const res = await axios.post("http://localhost:5050/user/login", values);
+      const res = await axios.post("http://localhost:5050/user/login", values); // Adjusted to match user controller port
       localStorage.setItem("accessToken", res.data?.accessToken);
+
+      // Extract and store userId (assuming _id is returned in userDetails)
+      const userId = res.data?.userDetails?._id; // Adjust based on your response structure
+      if (userId) {
+        localStorage.setItem("userId", userId);
+      } else {
+        console.warn("userId not found in login response");
+        toast.error("User ID not received. Contact support.");
+        return;
+      }
+
       // Dismiss any existing toasts first, then show success message
       toast.dismiss();
       setTimeout(() => {
@@ -51,7 +62,7 @@ const Login = () => {
           position: "top-right",
         });
       }, 100);
-      navigate("/Dashboard");
+      navigate("/dashboard"); // Changed to lowercase for consistency with expense.jsx
     } catch (error) {
       console.error("Login failed", error);
       toast.error(

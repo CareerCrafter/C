@@ -33,12 +33,11 @@ export const sendResetEmail = async (req, res) => {
         from: process.env.EMAIL_USER,
         to: email,
         subject: "Password Reset Request",
-        html: (
+        html: `
           <p>
             You requested a password reset. Click{" "}
             <a href="${resetLink}">here</a> to reset your password.
-          </p>
-        ),
+          </p>`,
       });
     }
 
